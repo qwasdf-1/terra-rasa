@@ -1,0 +1,60 @@
+// Shared setup for every mod in this build (the library and the integration test host).
+// Applied after the Loom plugin; `modArchiveName` must be set before applying.
+
+def javaVersion = rootProject.java_version.toInteger()
+def minecraftVersion = rootProject.minecraft_version
+
+group = rootProject.maven_group
+version = rootProject.mod_version
+base {
+    archivesName = "${project.ext.modArchiveName}-mc${minecraftVersion}"
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraftVersion}"
+    implementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+
+    testImplementation platform('org.junit:junit-bom:5.12.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+processResources {
+    def expandedValues = [
+        version: project.version.toString(),
+        minecraft_version: minecraftVersion,
+        loader_version: rootProject.fabric_loader_version,
+        java_version: javaVersion.toString()
+    ]
+    inputs.properties expandedValues
+    filesMatching('fabric.mod.json') {
+        expand expandedValues
+    }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(javaVersion)
+    }
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = javaVersion
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+tasks.withType(Jar).configureEach {
+    from(rootProject.file('LICENSE')) {
+        rename { "LICENSE_${project.ext.modArchiveName}" }
+    }
+}

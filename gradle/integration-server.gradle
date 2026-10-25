@@ -1,0 +1,132 @@
+// Real dedicated-server integration testing, shared by the Terra Rasa and Soul Link builds (keep the
+// copies identical).
+//
+// A server install is production-style: the official Fabric server launcher, the pinned vanilla jar,
+// Fabric API and the mod jars under test in mods/. The Python harness in testing/ starts one isolated
+// server per test module, drives it over RCON and connects headless protocol clients.
+//
+// Applying this script defines two closures:
+//   registerServerInstall(name, description, directory, mods) -> TaskProvider<Sync>
+//   registerSuite(name, description, directory, install, pytestArguments) -> TaskProvider<Exec>
+// `mods` is anything a copy spec accepts (a task, a file collection). Pass extra pytest arguments with
+// -Ppytest.args="...".
+
+def javaVersion = project.java_version.toInteger()
+def minecraftVersion = project.minecraft_version
+
+configurations {
+    // Exactly the Fabric API artifact that is installed into every test server's mods/ folder.
+    integrationServerMods {
+        canBeConsumed = false
+        transitive = false
+    }
+}
+
+dependencies {
+    integrationServerMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+def integrationRoot = layout.buildDirectory.dir('integration')
+def packetReportDirectory = integrationRoot.map { it.dir('reports') }
+def fabricInstallerVersion = project.fabric_installer_version
+def launcherFile = integrationRoot.map { it.file("cache/fabric-server-launch-${minecraftVersion}-${project.fabric_loader_version}-${fabricInstallerVersion}.jar") }
+def vanillaServerJarCandidates = [
+    new File(gradle.gradleUserHomeDir, "caches/fabric-loom/${minecraftVersion}/minecraft-server.jar"),
+    new File(System.getProperty('user.home'), ".gradle/caches/fabric-loom/${minecraftVersion}/minecraft-server.jar")
+].unique()
+def javaLauncher = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(javaVersion)
+}
+
+ext.integrationRoot = integrationRoot
+
+def downloadFabricServerLauncher = tasks.register('downloadFabricServerLauncher') {
+    group = 'verification'
+    description = 'Downloads the pinned Fabric dedicated-server launcher once.'
+    def target = launcherFile
+    def url = "https://meta.fabricmc.net/v2/versions/loader/${minecraftVersion}/${project.fabric_loader_version}/${fabricInstallerVersion}/server/jar"
+    inputs.property('url', url)
+    outputs.file(target)
+    doLast {
+        def file = target.get().asFile
+        file.parentFile.mkdirs()
+        def partial = new File(file.parentFile, file.name + '.part')
+        new URI(url).toURL().withInputStream { input -> partial.withOutputStream { it << input } }
+        if (!partial.renameTo(file)) {
+            throw new GradleException("Could not move ${partial} to ${file}")
+        }
+    }
+}
+
+def generatePacketReport = tasks.register('generatePacketReport', Exec) {
+    group = 'verification'
+    description = 'Runs the vanilla data generator to produce protocol packet ids for the headless test client.'
+    def outputDirectory = packetReportDirectory
+    def vanillaJar = vanillaServerJarCandidates.find { it.isFile() } ?: vanillaServerJarCandidates.first()
+    inputs.file(vanillaJar)
+    outputs.file(outputDirectory.map { it.file('reports/packets.json') })
+    def scratch = layout.buildDirectory.dir('tmp/generatePacketReport')
+    workingDir(scratch)
+    doFirst {
+        scratch.get().asFile.mkdirs()
+        if (!vanillaJar.isFile()) {
+            throw new GradleException("Vanilla server jar not found at ${vanillaJar}; run ./gradlew build once so Loom caches it.")
+        }
+        executable(javaLauncher.get().executablePath.asFile.absolutePath)
+        args('-DbundlerMainClass=net.minecraft.data.Main', '-jar', vanillaJar.absolutePath,
+                '--reports', '--output', outputDirectory.get().asFile.absolutePath)
+    }
+}
+
+ext.registerServerInstall = { String name, String descriptionText, Provider<Directory> directory, Object mods ->
+    tasks.register(name, Sync) {
+        group = 'verification'
+        description = descriptionText
+        dependsOn(downloadFabricServerLauncher)
+        def vanillaJar = vanillaServerJarCandidates.find { it.isFile() } ?: vanillaServerJarCandidates.first()
+        into(directory)
+        from(mods) {
+            into('mods')
+        }
+        from(configurations.integrationServerMods) {
+            into('mods')
+        }
+        from(launcherFile) {
+            rename { 'fabric-server-launch.jar' }
+        }
+        // Reuse Loom's cached vanilla jar instead of downloading it again.
+        def launcherProperties = layout.buildDirectory.file("tmp/${name}/fabric-server-launcher.properties")
+        from(launcherProperties)
+        doFirst {
+            def propertiesFile = launcherProperties.get().asFile
+            propertiesFile.parentFile.mkdirs()
+            propertiesFile.text = vanillaJar.isFile() ? "serverJar=${vanillaJar.absolutePath.replace('\\', '/')}\n" : ''
+        }
+        preserve {
+            // Downloaded libraries and per-session worlds survive re-syncs.
+            include 'libraries/**', '.fabric/**', 'versions/**', 'sessions/**'
+        }
+    }
+}
+
+ext.registerSuite = { String name, String descriptionText, Provider<Directory> directory, Object install, List<String> baseArguments ->
+    tasks.register(name, Exec) {
+        group = 'verification'
+        description = descriptionText
+        dependsOn(install, generatePacketReport)
+        def reports = packetReportDirectory
+        def uvExecutable = providers.environmentVariable('UV_EXECUTABLE').orElse('uv')
+        def pytestArguments = providers.gradleProperty('pytest.args').orElse('')
+        workingDir(project.file('testing'))
+        // The suite drives a live server; never treat it as up to date.
+        outputs.upToDateWhen { false }
+        doFirst {
+            executable(uvExecutable.get())
+            def extra = pytestArguments.get().trim()
+            args(['run', '--locked', 'pytest'] + baseArguments + (extra ? extra.split(/\s+/).toList() : []))
+            environment('MC_TEST_SERVER_DIR', directory.get().asFile.absolutePath)
+            environment('MC_TEST_JAVA', javaLauncher.get().executablePath.asFile.absolutePath)
+            environment('MC_TEST_PACKETS_JSON', reports.get().file('reports/packets.json').asFile.absolutePath)
+        }
+    }
+}

@@ -1,0 +1,12 @@
+// Test-only host mod: commands and a holding dimension that drive Terra Rasa on a real server.
+plugins {
+    id 'net.fabricmc.fabric-loom'
+}
+
+ext.modArchiveName = 'terra-rasa-testhost'
+apply from: rootProject.file('gradle/mod-conventions.gradle')
+
+dependencies {
+    // Installed next to the library jar on the test server, as a separate mod.
+    implementation rootProject
+}

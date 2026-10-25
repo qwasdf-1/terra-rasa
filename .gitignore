@@ -1,0 +1,14 @@
+.gradle/
+build/
+run/
+logs/
+*.iml
+.idea/
+.vscode/
+__pycache__/
+.pytest_cache/
+testing/.venv/
+
+# Local design and research material. The distributable repository tracks
+# implementation and feature reference documentation only.
+/docs/design/

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "terrarasa-testhost",
+  "version": "${version}",
+  "name": "Terra Rasa Test Host",
+  "description": "Test-only host mod that drives Terra Rasa from commands. Never install it on a real server.",
+  "authors": ["Terra Rasa Contributors"],
+  "license": "Apache-2.0",
+  "environment": "server",
+  "entrypoints": {
+    "main": ["dev.terrarasa.testhost.TestHost"]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "${minecraft_version}",
+    "java": ">=${java_version}",
+    "fabric-api": "*",
+    "terrarasa": "*"
+  }
+}

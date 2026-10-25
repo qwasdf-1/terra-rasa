@@ -1,0 +1,42 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'maven-publish'
+}
+
+ext.modArchiveName = 'terra-rasa'
+apply from: rootProject.file('gradle/mod-conventions.gradle')
+apply from: rootProject.file('gradle/integration-server.gradle')
+
+// Published as dev.terrarasa:terra-rasa. Host mods depend on it and usually bundle it with `include`.
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId = 'terra-rasa'
+            from components.java
+            pom {
+                name = 'Terra Rasa'
+                description = 'Swaps freshly seeded, pre-generated canonical dimensions into a running dedicated server without reconnecting players.'
+                url = 'https://github.com/qwasdf-1/terra-rasa'
+                licenses {
+                    license {
+                        name = 'Apache-2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0'
+                    }
+                }
+                scm {
+                    url = 'https://github.com/qwasdf-1/terra-rasa'
+                }
+            }
+        }
+    }
+}
+
+// The library alone does nothing; the test host drives it the way a game mod would.
+evaluationDependsOn(':testhost')
+def testServerDirectory = integrationRoot.map { it.dir('server') }
+def prepareIntegrationServer = registerServerInstall('prepareIntegrationServer',
+        'Assembles a production-style Fabric dedicated server with Terra Rasa and its test host.',
+        testServerDirectory, files(tasks.named('jar'), project(':testhost').tasks.named('jar')))
+
+registerSuite('integrationTest', 'Runs the real dedicated-server integration suite (Python harness in testing/).',
+        testServerDirectory, prepareIntegrationServer, [])

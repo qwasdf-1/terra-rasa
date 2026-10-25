@@ -1,0 +1,19 @@
+[project]
+name = "terra-rasa-testkit"
+version = "0.1.0"
+description = "Real dedicated-server test kit for Fabric mods (server process, RCON, protocol clients, Anvil readers), and Terra Rasa's integration suite"
+requires-python = ">=3.14"
+license = "Apache-2.0"
+dependencies = ["pytest>=8.3"]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "terra_rasa_testkit"
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
