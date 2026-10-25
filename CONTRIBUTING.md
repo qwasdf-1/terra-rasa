@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Terra Rasa. Start with [How a swap works](README.md#how-a-swap-works) in the README, then [CanonicalActivationService](src/main/java/dev/terrarasa/CanonicalActivationService.java) and [WorldPreparationService](src/main/java/dev/terrarasa/WorldPreparationService.java), which hold the two halves of the lifecycle.
+Thanks for helping improve Terra Rasa. Start with the [host lifecycle](README.md#host-lifecycle) and [host integration guide](docs/host-integration.md), then read [CanonicalActivationService](src/main/java/dev/terrarasa/CanonicalActivationService.java) and [WorldPreparationService](src/main/java/dev/terrarasa/WorldPreparationService.java), which hold the two halves of the lifecycle.
 
 ## Build And Test
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Document the library utilities, canonical-world lifecycle, host integration, pregeneration, reset behavior, and recovery model.
+
 ## 0.1.0
 
 The first public release, for Minecraft 26.2 on Fabric.
