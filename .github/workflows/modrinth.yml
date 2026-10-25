@@ -1,0 +1,117 @@
+name: Publish to Modrinth
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub Release tag, for example v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (vars.MODRINTH_PROJECT_ID != '' || vars.MODRINTH_PROJECT_URL != '')
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Keep the resolver available even when manually publishing an older tag.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Verify release tag and read version metadata
+        id: release
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}" >/dev/null
+          version="$(git show "$RELEASE_TAG:gradle.properties" | sed -n 's/^mod_version=//p')"
+          minecraft="$(git show "$RELEASE_TAG:gradle.properties" | sed -n 's/^minecraft_version=//p')"
+          test -n "$version" && test -n "$minecraft"
+          test "$RELEASE_TAG" = "v$version" || {
+            echo "Release tag $RELEASE_TAG does not match mod_version $version" >&2
+            exit 1
+          }
+          suffix="-mc${minecraft}-${version}.jar"
+          jar_name="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | awk -v suffix="$suffix" 'substr($0, length($0) - length(suffix) + 1) == suffix { print; exit }')"
+          test -n "$jar_name" || { echo "No runtime jar ending in $suffix is attached to the release" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "minecraft=$minecraft" >> "$GITHUB_OUTPUT"
+          echo "jar_name=$jar_name" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify GitHub release assets
+        env:
+          JAR_NAME: ${{ steps.release.outputs.jar_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$RELEASE_TAG" --pattern "$JAR_NAME" --pattern SHA256SUMS --dir dist
+          (cd dist && sha256sum --check SHA256SUMS)
+          gh release view "$RELEASE_TAG" --json body --jq .body > "$RUNNER_TEMP/changelog.md"
+          test -s "$RUNNER_TEMP/changelog.md"
+
+      - name: Resolve Modrinth project ID
+        id: project
+        env:
+          MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+          MODRINTH_PROJECT_URL: ${{ vars.MODRINTH_PROJECT_URL }}
+          EXPECTED_SOURCE_URL: https://github.com/qwasdf-1/terra-rasa
+          MODRINTH_USER_AGENT: qwasdf-1/terra-rasa-github-publisher
+        run: |
+          set -euo pipefail
+          result="$(python3 .github/scripts/resolve_modrinth_project.py)"
+          project_id="$(jq -er '.id' <<< "$result")"
+          project_slug="$(jq -er '.slug' <<< "$result")"
+          echo "project_id=$project_id" >> "$GITHUB_OUTPUT"
+          {
+            echo "Resolved Terra Rasa Modrinth project: $project_slug ($project_id)."
+            if [[ -z "$MODRINTH_PROJECT_ID" ]]; then
+              echo "For later runs, set Actions variable MODRINTH_PROJECT_ID to $project_id; the ID will take precedence over the URL."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Resolve Fabric API project ID
+        id: fabric_api
+        run: |
+          set -euo pipefail
+          project="$(curl --fail-with-body --silent --show-error -H 'User-Agent: qwasdf-1/terra-rasa-github-publisher' https://api.modrinth.com/v2/project/fabric-api)"
+          [[ "$(jq -er '.slug' <<< "$project")" == "fabric-api" ]]
+          echo "project_id=$(jq -er '.id' <<< "$project")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish version to Modrinth
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          PROJECT_ID: ${{ steps.project.outputs.project_id }}
+          FABRIC_API_ID: ${{ steps.fabric_api.outputs.project_id }}
+          VERSION: ${{ steps.release.outputs.version }}
+          MINECRAFT: ${{ steps.release.outputs.minecraft }}
+          JAR_NAME: ${{ steps.release.outputs.jar_name }}
+        run: |
+          set -euo pipefail
+          test -n "$MODRINTH_TOKEN" || { echo "Set the MODRINTH_TOKEN Actions secret with VERSION_CREATE scope" >&2; exit 1; }
+          jq -n --rawfile changelog "$RUNNER_TEMP/changelog.md" \
+            --arg name "Terra Rasa $VERSION" \
+            --arg version "$VERSION" \
+            --arg project "$PROJECT_ID" \
+            --arg minecraft "$MINECRAFT" \
+            --arg fabric "$FABRIC_API_ID" \
+            '{name:$name, version_number:$version, changelog:$changelog, dependencies:[{project_id:$fabric,dependency_type:"required"}], game_versions:[$minecraft], version_type:"release", loaders:["fabric"], environment:"dedicated_server_only", status:"listed", project_id:$project, file_parts:["modfile"], primary_file:"modfile"}' \
+            > "$RUNNER_TEMP/modrinth-version.json"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: $MODRINTH_TOKEN" \
+            -H 'User-Agent: qwasdf-1/terra-rasa-github-publisher' \
+            -F "data=@$RUNNER_TEMP/modrinth-version.json;type=application/json" \
+            -F "modfile=@dist/$JAR_NAME" \
+            https://api.modrinth.com/v2/version \
+            | jq -r '"Published Modrinth version \(.version_number) (\(.id))"'
