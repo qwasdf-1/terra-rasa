@@ -68,7 +68,6 @@ jobs:
           MODRINTH_PROJECT_URL: ${{ vars.MODRINTH_PROJECT_URL }}
           EXPECTED_SOURCE_URL: https://github.com/qwasdf-1/terra-rasa
           MODRINTH_USER_AGENT: qwasdf-1/terra-rasa-github-publisher
-          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         run: |
           set -euo pipefail
           result="$(python3 .github/scripts/resolve_modrinth_project.py)"
@@ -109,10 +108,24 @@ jobs:
             --arg fabric "$FABRIC_API_ID" \
             '{name:$name, version_number:$version, changelog:$changelog, dependencies:[{project_id:$fabric,dependency_type:"required"}], game_versions:[$minecraft], version_type:"release", loaders:["fabric"], environment:"dedicated_server_only", status:"listed", project_id:$project, file_parts:["modfile"], primary_file:"modfile"}' \
             > "$RUNNER_TEMP/modrinth-version.json"
-          curl --fail-with-body --silent --show-error \
+          response_file="$RUNNER_TEMP/modrinth-response.json"
+          if ! http_status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
             -H "Authorization: $MODRINTH_TOKEN" \
             -H 'User-Agent: qwasdf-1/terra-rasa-github-publisher' \
             -F "data=@$RUNNER_TEMP/modrinth-version.json;type=application/json" \
             -F "modfile=@dist/$JAR_NAME" \
-            https://api.modrinth.com/v2/version \
-            | jq -r '"Published Modrinth version \(.version_number) (\(.id))"'
+            https://api.modrinth.com/v2/version)"; then
+            echo "Could not connect to the Modrinth version upload endpoint." >&2
+            test ! -s "$response_file" || cat "$response_file" >&2
+            exit 1
+          fi
+          if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+            echo "Modrinth version upload failed with HTTP $http_status:" >&2
+            if ! jq -e . "$response_file" >/dev/null 2>&1; then
+              cat "$response_file" >&2
+            else
+              jq -r 'if type == "object" then [(.error // empty), (.description // empty)] | map(select(length > 0)) | join(": ") else tostring end' "$response_file" >&2
+            fi
+            exit 1
+          fi
+          jq -er 'select(.id and .version_number) | "Published Modrinth version \(.version_number) (\(.id))"' "$response_file"
