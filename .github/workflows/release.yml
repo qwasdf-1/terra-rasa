@@ -5,6 +5,7 @@ on:
     tags: ["v*"]
 
 permissions:
+  actions: write
   contents: write
 
 jobs:
@@ -58,3 +59,13 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/*.jar dist/SHA256SUMS
           --verify-tag --latest --title "Terra Rasa $VERSION"
           --notes-file "$RUNNER_TEMP/release-notes.md"
+
+      - name: Dispatch Modrinth publishing workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: >-
+          gh workflow run modrinth.yml
+          --repo "$GH_REPO"
+          --ref main
+          --field tag="$GITHUB_REF_NAME"
