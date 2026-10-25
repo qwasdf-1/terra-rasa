@@ -34,16 +34,24 @@ project_id = os.environ.get("MODRINTH_PROJECT_ID", "").strip()
 project_url = os.environ.get("MODRINTH_PROJECT_URL", "").strip()
 expected_source = os.environ["EXPECTED_SOURCE_URL"].rstrip("/")
 user_agent = os.environ["MODRINTH_USER_AGENT"]
+modrinth_token = os.environ.get("MODRINTH_TOKEN", "").strip()
 
 if not project_id and not project_url:
     fail("Set a Modrinth project URL for the first publish, or pin its ID in Actions variables")
+
+if not modrinth_token:
+    fail("Set MODRINTH_TOKEN with PROJECT_READ and VERSION_CREATE permissions")
 
 # A pinned ID takes precedence; the URL is only needed for first-time resolution.
 expected_slug = slug_from_url(project_url) if project_url and not project_id else None
 lookup = project_id or expected_slug
 request = Request(
     "https://api.modrinth.com/v2/project/" + quote(lookup, safe=""),
-    headers={"User-Agent": user_agent, "Accept": "application/json"},
+    headers={
+        "User-Agent": user_agent,
+        "Accept": "application/json",
+        "Authorization": modrinth_token,
+    },
 )
 try:
     with urlopen(request, timeout=30) as response:

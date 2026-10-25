@@ -8,7 +8,7 @@ The workflow does not edit the Modrinth project page description, gallery, categ
 
 1. Create and configure the Modrinth project. Set its source link to:
    https://github.com/qwasdf-1/terra-rasa
-2. Create a Modrinth token with the VERSION_CREATE permission.
+2. Create a Modrinth token with `PROJECT_READ` and `VERSION_CREATE` permissions. `PROJECT_READ` lets the publisher resolve draft projects; `VERSION_CREATE` lets it upload versions.
 3. In this GitHub repository, add the Actions secret MODRINTH_TOKEN with that token.
 4. For the first publish, add the Actions variable MODRINTH_PROJECT_URL with the project's full Modrinth URL, such as https://modrinth.com/mod/your-project-slug.
 5. Run the Publish to Modrinth workflow from Actions and enter an existing release tag, such as v0.1.0.
@@ -23,4 +23,4 @@ If a GitHub Release already exists and needs to be published on Modrinth, run Pu
 
 ## Checks and failures
 
-The workflow stops if the tag does not match the mod version at that tag, if the expected runtime jar or checksum is missing, if the checksum fails, or if the Modrinth project's source URL points elsewhere. The Modrinth token is only used for version creation; project lookups are public API requests.
+The workflow stops if the tag does not match the mod version at that tag, if the expected runtime jar or checksum is missing, if the checksum fails, or if the Modrinth project's source URL points elsewhere. The token is used to resolve the project (including while it is a draft) and create its version. The publisher does not change project visibility: submit the draft for Modrinth review in the project settings before expecting it to appear publicly.

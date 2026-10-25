@@ -68,6 +68,7 @@ jobs:
           MODRINTH_PROJECT_URL: ${{ vars.MODRINTH_PROJECT_URL }}
           EXPECTED_SOURCE_URL: https://github.com/qwasdf-1/terra-rasa
           MODRINTH_USER_AGENT: qwasdf-1/terra-rasa-github-publisher
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         run: |
           set -euo pipefail
           result="$(python3 .github/scripts/resolve_modrinth_project.py)"
