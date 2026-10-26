@@ -23,7 +23,7 @@ public final class StartupRecovery {
         Optional<ActivationJournal> loaded;
         try {
             // Before the journal re-asserts a run seed: on first start this is the world's own seed.
-            PinnedSeed.load(paths, server.getWorldGenSettings().options().seed());
+            PinnedSeed.load(paths, MinecraftCompat.worldSeed(server));
             loaded = ActivationJournal.load(paths);
         } catch (IOException e) {
             throw new IllegalStateException("Terra Rasa pinned seed or activation journal is unreadable; refusing to open the world", e);
@@ -52,9 +52,9 @@ public final class StartupRecovery {
                 }
             }
             long seed = journal.phase == ActivationJournal.Phase.COMMITTED ? journal.newSeed : journal.previousSeed;
-            if (server.getWorldGenSettings().options().seed() != seed) {
+            if (MinecraftCompat.worldSeed(server) != seed) {
                 TerraRasa.LOGGER.warn("Re-asserting journaled seed {} (saved settings had {})", seed,
-                        server.getWorldGenSettings().options().seed());
+                        MinecraftCompat.worldSeed(server));
             }
             CanonicalActivationService.setGlobalSeed(server, seed);
             if (journal.phase == ActivationJournal.Phase.COMMITTED) {

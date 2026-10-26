@@ -1,0 +1,21 @@
+{
+  "required": true,
+  "package": "dev.terrarasa.mixin",
+  "mixins": [
+    "ChunkMapAccessor",
+    "EntityStorageAccessor",
+    "MinecraftServerAccessor",
+    "MinecraftServerMixin",
+    "PersistentEntitySectionManagerAccessor",
+    "PoiManagerMixin",
+    "SectionStorageAccessor",
+    "ServerFunctionManagerAccessor",
+    "ServerLevelAccessor",
+    "ServerLevelMixin",
+    "StatsCounterAccessor",
+    "PrimaryLevelDataAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

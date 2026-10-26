@@ -55,7 +55,8 @@ final class StagedChunkTickets {
      * run's spawn area, so it goes before any pregeneration.
      */
     void applyQueued(int limit, MinecraftServer server) {
-        this.loading.removeIf(chunk -> chunk.level().getChunkSource().getChunkNow(chunk.pos().x(), chunk.pos().z()) != null);
+        this.loading.removeIf(chunk -> chunk.level().getChunkSource().getChunkNow(
+                MinecraftCompat.chunkX(chunk.pos()), MinecraftCompat.chunkZ(chunk.pos())) != null);
         int starts = Math.min(limit, GenerationBudget.available(server, this, false));
         Iterator<LoadedChunk> queued = this.queuedTickets.iterator();
         for (int i = 0; i < starts && queued.hasNext(); i++) {
@@ -140,8 +141,8 @@ final class StagedChunkTickets {
     }
 
     private static void forEachChunk(ChunkPos center, int radius, Consumer<ChunkPos> action) {
-        for (int x = center.x() - radius; x <= center.x() + radius; x++) {
-            for (int z = center.z() - radius; z <= center.z() + radius; z++) {
+        for (int x = MinecraftCompat.chunkX(center) - radius; x <= MinecraftCompat.chunkX(center) + radius; x++) {
+            for (int z = MinecraftCompat.chunkZ(center) - radius; z <= MinecraftCompat.chunkZ(center) + radius; z++) {
                 action.accept(new ChunkPos(x, z));
             }
         }

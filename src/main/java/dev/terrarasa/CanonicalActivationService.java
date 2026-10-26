@@ -16,7 +16,7 @@ import java.util.UUID;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.terrarasa.mixin.MinecraftServerAccessor;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
+import dev.terrarasa.mixin.ChunkMapAccessor;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
@@ -31,8 +31,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.TicketStorage;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.dimension.LevelStem;
-import net.minecraft.world.level.levelgen.WorldGenSettings;
-import net.minecraft.world.level.levelgen.WorldOptions;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -79,7 +77,7 @@ public final class CanonicalActivationService {
 
         ActivationJournal journal = new ActivationJournal();
         journal.runId = runId.toString();
-        journal.previousSeed = server.getWorldGenSettings().options().seed();
+        journal.previousSeed = MinecraftCompat.worldSeed(server);
         journal.newSeed = manifest.seed;
         journal.previousRunLabel = "replaced-by-" + runId;
         if (manifest.spawn != null) {
@@ -205,7 +203,7 @@ public final class CanonicalActivationService {
     private static void bringOnline(MinecraftServer server, Collection<ServerLevel> levels) {
         for (ServerLevel level : levels) {
             activateSavedTickets(level);
-            ServerLevelEvents.LOAD.invoker().onLevelLoad(server, level);
+            MinecraftCompat.levelLoaded(server, level);
         }
         server.updateMobSpawningFlags();
     }
@@ -280,7 +278,7 @@ public final class CanonicalActivationService {
     private BlockPos validate(MinecraftServer server, RunManifest manifest,
             Map<ResourceKey<Level>, ServerLevel> constructed, Map<ResourceKey<Level>, ServerLevel> retired) throws LifecycleException {
         long seed = manifest.seed;
-        if (server.getWorldGenSettings().options().seed() != seed) {
+        if (MinecraftCompat.worldSeed(server) != seed) {
             throw new LifecycleException("Server-global seed was not rebound");
         }
         for (Map.Entry<ResourceKey<Level>, ServerLevel> entry : constructed.entrySet()) {
@@ -310,8 +308,8 @@ public final class CanonicalActivationService {
         // Smoke test: the prepared spawn chunk loads from promoted storage.
         BlockPos spawn = new BlockPos(manifest.spawn.x, manifest.spawn.y, manifest.spawn.z);
         ServerLevel overworld = server.overworld();
-        ChunkPos spawnChunk = ChunkPos.containing(spawn);
-        if (overworld.getChunkSource().getChunk(spawnChunk.x(), spawnChunk.z(), ChunkStatus.FULL, true) == null) {
+        ChunkPos spawnChunk = MinecraftCompat.chunkAt(spawn);
+        if (overworld.getChunkSource().getChunk(MinecraftCompat.chunkX(spawnChunk), MinecraftCompat.chunkZ(spawnChunk), ChunkStatus.FULL, true) == null) {
             throw new LifecycleException("Prepared spawn chunk could not be loaded");
         }
         return spawn;
@@ -381,15 +379,7 @@ public final class CanonicalActivationService {
 
     /** Rebinds the server-global seed; it is saved with global saved data and reasserted from the journal on startup. */
     public static void setGlobalSeed(MinecraftServer server, long seed) {
-        WorldGenSettings current = server.getWorldGenSettings();
-        if (current.options().seed() == seed) {
-            return;
-        }
-        WorldOptions options = current.options();
-        WorldGenSettings updated = new WorldGenSettings(
-                new WorldOptions(seed, options.generateStructures(), options.generateBonusChest()), current.dimensions());
-        ((MinecraftServerAccessor) server).terrarasa$setWorldGenSettings(updated);
-        server.getDataStorage().set(WorldGenSettings.TYPE, updated);
+        MinecraftCompat.setWorldSeed(server, seed);
     }
 
     private static void activateSavedTickets(ServerLevel level) {
@@ -460,7 +450,8 @@ public final class CanonicalActivationService {
             json.addProperty("players", level.players().size());
             json.addProperty("loadedChunks", level.getChunkSource().getLoadedChunksCount());
             int[] ticking = {0};
-            level.getChunkSource().chunkMap.forEachBlockTickingChunk(chunk -> ticking[0]++);
+            ((ChunkMapAccessor) level.getChunkSource().chunkMap)
+                    .terrarasa$forEachBlockTickingChunk(chunk -> ticking[0]++);
             json.addProperty("tickingChunks", ticking[0]);
             array.add(json);
         }

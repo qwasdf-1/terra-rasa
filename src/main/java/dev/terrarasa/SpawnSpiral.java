@@ -43,7 +43,7 @@ final class SpawnSpiral {
             }
             if (this.x >= -5 && this.x <= 5 && this.z >= -5 && this.z <= 5) {
                 BlockPos candidate = PlayerSpawnFinder.getSpawnPosInChunk(this.level,
-                        new ChunkPos(this.center.x() + this.x, this.center.z() + this.z));
+                        new ChunkPos(MinecraftCompat.chunkX(this.center) + this.x, MinecraftCompat.chunkZ(this.center) + this.z));
                 if (candidate != null) {
                     return candidate;
                 }

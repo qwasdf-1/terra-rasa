@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing GitHub Release tag, for example v0.1.0
+        description: Existing GitHub Release tag, for example v0.2.0
         required: true
         type: string
 
@@ -14,58 +14,79 @@ permissions:
   contents: read
 
 jobs:
-  publish:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (vars.MODRINTH_PROJECT_ID != '' || vars.MODRINTH_PROJECT_URL != '')
+  release:
+    if: github.event_name == 'workflow_dispatch' || vars.MODRINTH_PROJECT_ID != ''
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      matrix: ${{ steps.release.outputs.matrix }}
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      # Keep the resolver available even when manually publishing an older tag.
       - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 1
 
-      - name: Verify release tag and read version metadata
+      - name: Read release target jars
         id: release
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
           git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}" >/dev/null
           version="$(git show "$RELEASE_TAG:gradle.properties" | sed -n 's/^mod_version=//p')"
-          minecraft="$(git show "$RELEASE_TAG:gradle.properties" | sed -n 's/^minecraft_version=//p')"
-          test -n "$version" && test -n "$minecraft"
+          test -n "$version"
           test "$RELEASE_TAG" = "v$version" || {
             echo "Release tag $RELEASE_TAG does not match mod_version $version" >&2
             exit 1
           }
-          suffix="-mc${minecraft}-${version}.jar"
-          jar_name="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | awk -v suffix="$suffix" 'substr($0, length($0) - length(suffix) + 1) == suffix { print; exit }')"
-          test -n "$jar_name" || { echo "No runtime jar ending in $suffix is attached to the release" >&2; exit 1; }
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "minecraft=$minecraft" >> "$GITHUB_OUTPUT"
-          echo "jar_name=$jar_name" >> "$GITHUB_OUTPUT"
+          release_json="$(gh release view "$RELEASE_TAG" --json assets)"
+          targets="$(jq -c --arg version "$version" '
+            [.assets[].name
+              | select(startswith("terra-rasa-mc") and endswith("-" + $version + ".jar"))
+              | (ltrimstr("terra-rasa-mc") | rtrimstr("-" + $version + ".jar")) as $minecraft
+              | select($minecraft | test("^[0-9]+(\\.[0-9]+)+$"))
+              | {minecraft_version:$minecraft, jar_name:("terra-rasa-mc" + $minecraft + "-" + $version + ".jar")}]
+            | unique_by(.minecraft_version)
+          ' <<< "$release_json")"
+          test "$(jq 'length' <<< "$targets")" -gt 0 || {
+            echo "No Terra Rasa runtime jars for version $version are attached to $RELEASE_TAG" >&2
+            exit 1
+          }
 
-      - name: Download and verify GitHub release assets
-        env:
-          JAR_NAME: ${{ steps.release.outputs.jar_name }}
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          gh release download "$RELEASE_TAG" --pattern "$JAR_NAME" --pattern SHA256SUMS --dir dist
-          (cd dist && sha256sum --check SHA256SUMS)
-          gh release view "$RELEASE_TAG" --json body --jq .body > "$RUNNER_TEMP/changelog.md"
-          test -s "$RUNNER_TEMP/changelog.md"
+          if git cat-file -e "$RELEASE_TAG:gradle/minecraft-targets.json" 2>/dev/null; then
+            expected="$(git show "$RELEASE_TAG:gradle/minecraft-targets.json" | jq -c '[.include[].minecraft_version] | unique | sort')"
+            actual="$(jq -c '[.[].minecraft_version] | unique | sort' <<< "$targets")"
+            test "$actual" = "$expected" || {
+              echo "Release jars do not match the tagged Minecraft target matrix" >&2
+              echo "Expected: $expected" >&2
+              echo "Found:    $actual" >&2
+              exit 1
+            }
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          matrix="$(jq -cn --argjson include "$targets" '{include:$include}')"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  project:
+    if: github.event_name == 'workflow_dispatch' || vars.MODRINTH_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+    outputs:
+      project_id: ${{ steps.project.outputs.project_id }}
+      fabric_api_id: ${{ steps.fabric_api.outputs.project_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
 
       - name: Resolve Modrinth project ID
         id: project
         env:
           MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
-          MODRINTH_PROJECT_URL: ${{ vars.MODRINTH_PROJECT_URL }}
           EXPECTED_SOURCE_URL: https://github.com/qwasdf-1/terra-rasa
           MODRINTH_USER_AGENT: qwasdf-1/terra-rasa-github-publisher
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
@@ -75,12 +96,7 @@ jobs:
           project_id="$(jq -er '.id' <<< "$result")"
           project_slug="$(jq -er '.slug' <<< "$result")"
           echo "project_id=$project_id" >> "$GITHUB_OUTPUT"
-          {
-            echo "Resolved Terra Rasa Modrinth project: $project_slug ($project_id)."
-            if [[ -z "$MODRINTH_PROJECT_ID" ]]; then
-              echo "For later runs, set Actions variable MODRINTH_PROJECT_ID to $project_id; the ID will take precedence over the URL."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Resolved Terra Rasa Modrinth project: $project_slug ($project_id)." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Resolve Fabric API project ID
         id: fabric_api
@@ -90,20 +106,86 @@ jobs:
           [[ "$(jq -er '.slug' <<< "$project")" == "fabric-api" ]]
           echo "project_id=$(jq -er '.id' <<< "$project")" >> "$GITHUB_OUTPUT"
 
-      - name: Publish version to Modrinth
-        env:
-          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-          PROJECT_ID: ${{ steps.project.outputs.project_id }}
-          FABRIC_API_ID: ${{ steps.fabric_api.outputs.project_id }}
-          VERSION: ${{ steps.release.outputs.version }}
-          MINECRAFT: ${{ steps.release.outputs.minecraft }}
-          JAR_NAME: ${{ steps.release.outputs.jar_name }}
+  publish:
+    needs: [release, project]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.release.outputs.matrix) }}
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+      PROJECT_ID: ${{ needs.project.outputs.project_id }}
+      FABRIC_API_ID: ${{ needs.project.outputs.fabric_api_id }}
+      VERSION: ${{ needs.release.outputs.version }}
+      MINECRAFT: ${{ matrix.minecraft_version }}
+      JAR_NAME: ${{ matrix.jar_name }}
+    steps:
+      - name: Download and verify release jar
         run: |
           set -euo pipefail
-          test -n "$MODRINTH_TOKEN" || { echo "Set the MODRINTH_TOKEN Actions secret with VERSION_CREATE scope" >&2; exit 1; }
+          test -n "$MODRINTH_TOKEN" || { echo "Set MODRINTH_TOKEN with VERSION_CREATE permission" >&2; exit 1; }
+          mkdir -p dist
+          gh release download "$RELEASE_TAG" --pattern "$JAR_NAME" --pattern SHA256SUMS --dir dist
+          expected="$(awk -v name="$JAR_NAME" '$2 == name { print $1 }' dist/SHA256SUMS)"
+          actual="$(sha256sum "dist/$JAR_NAME" | cut -d ' ' -f 1)"
+          test -n "$expected" && test "$actual" = "$expected" || {
+            echo "SHA-256 verification failed for $JAR_NAME" >&2
+            exit 1
+          }
+          gh release view "$RELEASE_TAG" --json body --jq .body > "$RUNNER_TEMP/changelog.md"
+          test -s "$RUNNER_TEMP/changelog.md"
+
+      - name: Publish Minecraft ${{ matrix.minecraft_version }} version to Modrinth
+        run: |
+          set -euo pipefail
+          version_number="${VERSION}-mc${MINECRAFT}"
+          version_name="Terra Rasa $VERSION (Minecraft $MINECRAFT)"
+          existing_response="$RUNNER_TEMP/existing-version.json"
+          if ! existing_status="$(curl --silent --show-error --output "$existing_response" --write-out '%{http_code}' \
+            -H 'User-Agent: qwasdf-1/terra-rasa-github-publisher' \
+            "https://api.modrinth.com/v2/project/${PROJECT_ID}/version/${version_number}")"; then
+            echo "Could not check whether Modrinth version $version_number already exists." >&2
+            test ! -s "$existing_response" || cat "$existing_response" >&2
+            exit 1
+          fi
+
+          if [[ "$existing_status" == "200" ]]; then
+            expected_sha512="$(sha512sum "dist/$JAR_NAME" | cut -d ' ' -f 1)"
+            existing_sha512="$(jq -r --arg jar "$JAR_NAME" '.files[] | select(.filename == $jar and .primary == true) | .hashes.sha512' "$existing_response" | head -n 1)"
+            if jq -e \
+              --arg project "$PROJECT_ID" \
+              --arg version "$version_number" \
+              --arg name "$version_name" \
+              --arg minecraft "$MINECRAFT" \
+              --arg fabric "$FABRIC_API_ID" \
+              --rawfile changelog "$RUNNER_TEMP/changelog.md" \
+              '.project_id == $project
+                and .version_number == $version
+                and .name == $name
+                and .changelog == $changelog
+                and .game_versions == [$minecraft]
+                and .loaders == ["fabric"]
+                and .version_type == "release"
+                and .environment == "dedicated_server_only"
+                and .status == "listed"
+                and any(.dependencies[]; .project_id == $fabric and .dependency_type == "required")' \
+              "$existing_response" >/dev/null && [[ "$existing_sha512" == "$expected_sha512" ]]; then
+              echo "Modrinth version $version_number already matches the release asset; skipping upload."
+              exit 0
+            fi
+            echo "Modrinth version $version_number already exists but its metadata or file differs from this release." >&2
+            exit 1
+          elif [[ "$existing_status" != "404" ]]; then
+            echo "Could not check existing Modrinth version $version_number (HTTP $existing_status):" >&2
+            cat "$existing_response" >&2
+            exit 1
+          fi
+
           jq -n --rawfile changelog "$RUNNER_TEMP/changelog.md" \
-            --arg name "Terra Rasa $VERSION" \
-            --arg version "$VERSION" \
+            --arg name "$version_name" \
+            --arg version "$version_number" \
             --arg project "$PROJECT_ID" \
             --arg minecraft "$MINECRAFT" \
             --arg fabric "$FABRIC_API_ID" \

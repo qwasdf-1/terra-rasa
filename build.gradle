@@ -1,17 +1,29 @@
 plugins {
-    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    // The supported 1.21.11 target uses legacy remapping; 26.1+ is unobfuscated.
+    // Resolve both Loom plugin IDs here so target selection below stays property-driven.
+    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
     id 'maven-publish'
+}
+
+def obfuscatedMinecraft = project.minecraft_version.startsWith('1.')
+apply plugin: obfuscatedMinecraft ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
+
+if (obfuscatedMinecraft) {
+    dependencies {
+        mappings loom.officialMojangMappings()
+    }
 }
 
 ext.modArchiveName = 'terra-rasa'
 apply from: rootProject.file('gradle/mod-conventions.gradle')
 apply from: rootProject.file('gradle/integration-server.gradle')
 
-// Published as dev.terrarasa:terra-rasa. Host mods depend on it and usually bundle it with `include`.
+// Published as a Minecraft-specific artifact; hosts depend on it and usually bundle it with `include`.
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId = 'terra-rasa'
+            artifactId = "terra-rasa-mc${minecraft_version}"
             from components.java
             pom {
                 name = 'Terra Rasa'

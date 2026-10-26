@@ -45,7 +45,7 @@ Ordinary failures roll back to the prior levels and seed. If the process stops m
 `resetServerState(server)` clears the state commonly owned by a world session:
 
 - Scoreboard objectives, display slots, and teams; command storage; custom boss bars; scheduled functions; random sequences.
-- Weather, world clocks, and the wandering-trader timer.
+- Weather and the wandering-trader timer. On Minecraft 26.x it also resets world clocks and synchronizes them to connected players; 1.21.11 has no world-clock state to reset.
 - Data-pack setup through a fresh `#minecraft:load` run on the next function tick.
 
 `resetPlayer(server, player, gameMode)` clears inventory and ender chest, XP, effects and attribute modifiers, health, absorption, hunger, saturation, fire, freezing, air, fall distance and motion, entity tags, respawn and last-death locations, recipes, advancements, statistics, scoreboard scores, ender pearls, vehicles, and the “seen credits” state. It also closes containers and synchronizes the changes to the client.
@@ -58,7 +58,7 @@ Game rules, difficulty, operator and whitelist state, host-owned state, and save
 - `BEFORE_RETIRE` is the last safe point to cancel a swap while old levels are still live.
 - Chunky is detected at startup without a compile-time dependency. Active tasks targeting retired dimensions are canceled; a selection for a replaced dimension is rebound. If Chunky's API changes, Terra Rasa refuses activation when it cannot safely cancel a task.
 - Only configured resettable dimensions are replaced. Persistent and unknown dimensions keep their level data and pinned seed; runtime-added dimensions are not implicitly enrolled.
-- The library targets Minecraft 26.2 and Fabric dedicated servers. Vanilla clients connect normally.
+- The library targets Minecraft 1.21.11 and 26.1 through 26.3, with a separate build for each exact version. It runs on Fabric dedicated servers; vanilla clients connect normally. See [`gradle/minecraft-targets.json`](../gradle/minecraft-targets.json) for Java, Loader and Fabric API versions.
 
 ## World files
 

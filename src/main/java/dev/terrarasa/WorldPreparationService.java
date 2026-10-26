@@ -25,7 +25,6 @@ import java.util.stream.Stream;
 
 import com.google.gson.JsonObject;
 import dev.terrarasa.mixin.MinecraftServerAccessor;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
@@ -36,12 +35,13 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.PlayerSpawnFinder;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
-import net.minecraft.util.Util;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.LevelStem;
+import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -340,7 +340,7 @@ public final class WorldPreparationService {
         if (next != null) {
             ServerLevel level = LevelFactory.createStaged(server, next.key(), next.stem(), preparation.seed);
             ((MinecraftServerAccessor) server).terrarasa$levels().put(next.key(), level);
-            ServerLevelEvents.LOAD.invoker().onLevelLoad(server, level);
+            MinecraftCompat.levelLoaded(server, level);
             preparation.levels.put(next.target(), level);
             return;
         }
@@ -352,18 +352,16 @@ public final class WorldPreparationService {
 
     private void tickSpawnFinding(Preparation preparation) {
         ServerLevel overworld = preparation.overworld();
-        ServerChunkCache chunkSource = overworld.getChunkSource();
         if (preparation.spawnSearchCenter == null) {
-            // Vanilla's climate search samples the noise thousands of times; it is pure computation on a
-            // thread-safe sampler, so it runs on a worker instead of the server thread.
+            // Vanilla performs its climate search off-thread and returns the selected spawn position.
             if (preparation.climateSearch == null) {
-                preparation.climateSearch = CompletableFuture.supplyAsync(
-                        () -> chunkSource.randomState().sampler().findSpawnPosition(), Util.backgroundExecutor());
+                preparation.climateSearch = PlayerSpawnFinder.findSpawn(overworld, BlockPos.ZERO);
             }
             if (!preparation.climateSearch.isDone()) {
                 return;
             }
-            preparation.spawnSearchCenter = ChunkPos.containing(preparation.climateSearch.join());
+            Vec3 spawn = preparation.climateSearch.join();
+            preparation.spawnSearchCenter = MinecraftCompat.chunkAt(BlockPos.containing(spawn.x, 0, spawn.z));
             preparation.chunks.add(overworld, preparation.spawnSearchCenter, SPAWN_SEARCH_RADIUS);
             return;
         }
@@ -380,7 +378,7 @@ public final class WorldPreparationService {
         }
         preparation.manifest.spawn = new RunManifest.Spawn(spawn.getX(), spawn.getY(), spawn.getZ());
         preparation.manifest.timingsMillis.put("spawn_finding", preparation.phaseElapsedMillis());
-        preparation.preloadCenter = ChunkPos.containing(spawn);
+        preparation.preloadCenter = MinecraftCompat.chunkAt(spawn);
         preparation.chunks.add(overworld, preparation.preloadCenter, preparation.preloadRadius);
         preparation.enter(PreparationState.PRELOADING);
     }
@@ -632,8 +630,8 @@ public final class WorldPreparationService {
     private static int countFull(ServerLevel level, ChunkPos center, int radius) {
         ServerChunkCache chunkSource = level.getChunkSource();
         int full = 0;
-        for (int x = center.x() - radius; x <= center.x() + radius; x++) {
-            for (int z = center.z() - radius; z <= center.z() + radius; z++) {
+        for (int x = MinecraftCompat.chunkX(center) - radius; x <= MinecraftCompat.chunkX(center) + radius; x++) {
+            for (int z = MinecraftCompat.chunkZ(center) - radius; z <= MinecraftCompat.chunkZ(center) + radius; z++) {
                 if (chunkSource.getChunkNow(x, z) != null) {
                     full++;
                 }
@@ -659,7 +657,7 @@ public final class WorldPreparationService {
         private @Nullable CompletableFuture<Void> ioFlush;
         final ArrayDeque<StagedLevel> toConstruct = new ArrayDeque<>();
         @Nullable SpawnSpiral spawnSearch;
-        @Nullable CompletableFuture<BlockPos> climateSearch;
+        @Nullable CompletableFuture<Vec3> climateSearch;
         @Nullable CompletableFuture<Void> published;
         final long startedNanos = System.nanoTime();
         PreparationState state = PreparationState.CREATING;

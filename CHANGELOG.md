@@ -2,7 +2,14 @@
 
 ## Unreleased
 
-- Document the library utilities, canonical-world lifecycle, host integration, pregeneration, reset behavior, and recovery model.
+### Added
+
+- Separate builds for Minecraft 1.21.11 and 26.1 through 26.3, with version-specific adapters for level construction, seeds, storage paths, lifecycle events, and mixins.
+
+### Changed
+
+- Maven artifacts now include the Minecraft target in their artifact ID so builds for different game versions can coexist.
+- GitHub releases now bundle every supported target, and Modrinth publishes one target-specific version per jar with checksum-verified, retry-safe uploads.
 
 ## 0.1.0
 

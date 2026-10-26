@@ -40,9 +40,9 @@ public record WorldPaths(Path worldRoot) {
         return quarantineRoot().resolve(runLabel).resolve(dimension.getNamespace()).resolve(dimension.getPath());
     }
 
-    /** Mirrors {@code DimensionType.getStorageFolder}: {@code dimensions/<namespace>/<path>}. */
+    /** Resolves the vanilla storage directory using this Minecraft version's dimension layout. */
     public Path dimension(Identifier dimension) {
-        return dimension.resolveAgainst(this.worldRoot.resolve("dimensions"));
+        return MinecraftCompat.dimensionPath(this.worldRoot, dimension);
     }
 
     public Path stageDimensionsRoot(UUID runId) {

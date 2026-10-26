@@ -1,6 +1,16 @@
 // Test-only host mod: commands and a holding dimension that drive Terra Rasa on a real server.
 plugins {
-    id 'net.fabricmc.fabric-loom'
+    id 'net.fabricmc.fabric-loom' apply false
+    id 'net.fabricmc.fabric-loom-remap' apply false
+}
+
+def obfuscatedMinecraft = rootProject.minecraft_version.startsWith('1.')
+apply plugin: obfuscatedMinecraft ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
+
+if (obfuscatedMinecraft) {
+    dependencies {
+        mappings loom.officialMojangMappings()
+    }
 }
 
 ext.modArchiveName = 'terra-rasa-testhost'

@@ -81,7 +81,8 @@ final class Pregenerator {
         Iterator<ChunkPos> generating = this.loading.keySet().iterator();
         while (generating.hasNext()) {
             ChunkPos pos = generating.next();
-            ChunkStatus reached = chunkMap.getLatestStatus(ChunkPos.pack(pos.x(), pos.z()));
+            ChunkStatus reached = chunkMap.getLatestStatus(MinecraftCompat.packChunkPos(
+                    MinecraftCompat.chunkX(pos), MinecraftCompat.chunkZ(pos)));
             if (reached != null && reached.isOrAfter(TARGET)) {
                 this.finished.computeIfAbsent(tile(pos), key -> new ArrayList<>()).add(pos);
                 generating.remove();
@@ -123,7 +124,8 @@ final class Pregenerator {
     }
 
     private long tile(ChunkPos pos) {
-        return ChunkPos.pack(Math.floorDiv(pos.x() - this.task.centerChunkX, TILE), Math.floorDiv(pos.z() - this.task.centerChunkZ, TILE));
+        return MinecraftCompat.packChunkPos(Math.floorDiv(MinecraftCompat.chunkX(pos) - this.task.centerChunkX, TILE),
+                Math.floorDiv(MinecraftCompat.chunkZ(pos) - this.task.centerChunkZ, TILE));
     }
 
     boolean isDone() {

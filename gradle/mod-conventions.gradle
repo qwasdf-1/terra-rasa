@@ -3,6 +3,7 @@
 
 def javaVersion = rootProject.java_version.toInteger()
 def minecraftVersion = rootProject.minecraft_version
+def minecraftFamily = minecraftVersion.startsWith('1.') ? 'legacy' : 'modern'
 
 group = rootProject.maven_group
 version = rootProject.mod_version
@@ -14,10 +15,19 @@ repositories {
     mavenCentral()
 }
 
+sourceSets.main.java.srcDir(rootProject.file("src/versions/${minecraftFamily}/java"))
+sourceSets.main.resources.srcDir(rootProject.file("src/versions/${minecraftFamily}/resources"))
+
 dependencies {
     minecraft "com.mojang:minecraft:${minecraftVersion}"
-    implementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+    if (rootProject.minecraft_version.startsWith('1.')) {
+        // The remapping Loom plugin wires mod dependencies through modImplementation.
+        modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+    } else {
+        implementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+        implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+    }
 
     testImplementation platform('org.junit:junit-bom:5.12.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -29,7 +39,8 @@ processResources {
         version: project.version.toString(),
         minecraft_version: minecraftVersion,
         loader_version: rootProject.fabric_loader_version,
-        java_version: javaVersion.toString()
+        java_version: javaVersion.toString(),
+        mixins_config: minecraftFamily == 'legacy' ? 'terrarasa-legacy.mixins.json' : 'terrarasa-modern.mixins.json'
     ]
     inputs.properties expandedValues
     filesMatching('fabric.mod.json') {
