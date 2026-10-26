@@ -38,6 +38,7 @@ jobs:
       - name: Build and unit tests
         run: >-
           ./gradlew build
+          -Ploom_version=${{ matrix.loom_version }}
           -Pminecraft_version=${{ matrix.minecraft_version }}
           -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
           -Pfabric_api_version=${{ matrix.fabric_api_version }}
@@ -70,6 +71,7 @@ jobs:
       - name: Integration suite
         run: >-
           ./gradlew integrationTest
+          -Ploom_version=${{ matrix.loom_version }}
           -Pminecraft_version=${{ matrix.minecraft_version }}
           -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
           -Pfabric_api_version=${{ matrix.fabric_api_version }}

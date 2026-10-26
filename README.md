@@ -23,14 +23,14 @@ The host mod owns the game rules, player flow, and the decision to reset session
 
 Terra Rasa provides a separate build for each supported Minecraft version:
 
-| Minecraft | Java | Fabric API |
-|---|---:|---|
-| 1.21.11 | 21 | 0.141.6+1.21.11 |
-| 26.1 | 25 | 0.145.1+26.1 |
-| 26.1.1 | 25 | 0.145.4+26.1.1 |
-| 26.1.2 | 25 | 0.155.3+26.1.2 |
-| 26.2 | 25 | 0.161.0+26.2 |
-| 26.3 | 25 | 0.165.0+26.3 |
+| Minecraft | Java | Fabric Loom | Fabric API |
+|---|---:|---:|---|
+| 1.21.11 | 21 | 1.17.21 | 0.141.6+1.21.11 |
+| 26.1 | 25 | 1.18.4 | 0.145.1+26.1 |
+| 26.1.1 | 25 | 1.18.4 | 0.145.4+26.1.1 |
+| 26.1.2 | 25 | 1.18.4 | 0.155.3+26.1.2 |
+| 26.2 | 25 | 1.18.4 | 0.161.0+26.2 |
+| 26.3 | 25 | 1.18.4 | 0.165.0+26.3 |
 
 Each build uses Fabric Loader 0.19.5. The full target list is maintained in [`gradle/minecraft-targets.json`](gradle/minecraft-targets.json), and CI builds every target. Terra Rasa is a dedicated-server library; clients can remain vanilla.
 
@@ -55,17 +55,18 @@ dependencies {
 }
 ```
 
-Build and publish the matching variant by selecting its Minecraft, Fabric API, Loader and Java versions from the target matrix. For example, to publish the 26.3 build locally:
+Build and publish the matching variant by selecting its Minecraft, Loom, Fabric API, Loader and Java versions from the target matrix. For example, to publish the 26.3 build locally:
 
 ```sh
 ./gradlew publishToMavenLocal \\
   -Pminecraft_version=26.3 \\
+  -Ploom_version=1.18.4 \\
   -Pfabric_loader_version=0.19.5 \\
   -Pfabric_api_version=0.165.0+26.3 \\
   -Pjava_version=25
 ```
 
-For Minecraft 1.21.11, use Fabric API `0.141.6+1.21.11` and Java 21 instead. Do not use a jar built for a different Minecraft version. Each target has its own Maven artifact ID.
+For Minecraft 1.21.11, use Fabric API `0.141.6+1.21.11`, Loom `1.17.21`, and Java 21 instead. Do not use a jar built for a different Minecraft version. Each target has its own Maven artifact ID.
 
 ## Host lifecycle
 

@@ -4,7 +4,7 @@ Thanks for helping improve Terra Rasa. Start with the [host lifecycle](README.md
 
 ## Build And Test
 
-Use Java 21 for Minecraft 1.21.11 or Java 25 for Minecraft 26.x. The exact dependency matrix is in [`gradle/minecraft-targets.json`](gradle/minecraft-targets.json). The integration suite also needs [uv](https://docs.astral.sh/uv/), which installs Python 3.14 for it.
+Use Java 21 and Loom 1.17.21 for Minecraft 1.21.11, or Java 25 and Loom 1.18.4 for Minecraft 26.x. The exact dependency matrix is in [`gradle/minecraft-targets.json`](gradle/minecraft-targets.json). The integration suite also needs [uv](https://docs.astral.sh/uv/), which installs Python 3.14 for it.
 
 ```sh
 ./gradlew build             # library, test host and JUnit tests

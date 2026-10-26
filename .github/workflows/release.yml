@@ -38,6 +38,7 @@ jobs:
       - name: Build and test Minecraft ${{ matrix.minecraft_version }}
         run: >-
           ./gradlew clean build
+          -Ploom_version=${{ matrix.loom_version }}
           -Pminecraft_version=${{ matrix.minecraft_version }}
           -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
           -Pfabric_api_version=${{ matrix.fabric_api_version }}

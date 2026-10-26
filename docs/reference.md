@@ -58,7 +58,7 @@ Game rules, difficulty, operator and whitelist state, host-owned state, and save
 - `BEFORE_RETIRE` is the last safe point to cancel a swap while old levels are still live.
 - Chunky is detected at startup without a compile-time dependency. Active tasks targeting retired dimensions are canceled; a selection for a replaced dimension is rebound. If Chunky's API changes, Terra Rasa refuses activation when it cannot safely cancel a task.
 - Only configured resettable dimensions are replaced. Persistent and unknown dimensions keep their level data and pinned seed; runtime-added dimensions are not implicitly enrolled.
-- The library targets Minecraft 1.21.11 and 26.1 through 26.3, with a separate build for each exact version. It runs on Fabric dedicated servers; vanilla clients connect normally. See [`gradle/minecraft-targets.json`](../gradle/minecraft-targets.json) for Java, Loader and Fabric API versions.
+- The library targets Minecraft 1.21.11 and 26.1 through 26.3, with a separate build for each exact version. It runs on Fabric dedicated servers; vanilla clients connect normally. See [`gradle/minecraft-targets.json`](../gradle/minecraft-targets.json) for Java, Loom, Loader and Fabric API versions.
 
 ## World files
 
