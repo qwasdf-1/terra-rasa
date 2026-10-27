@@ -115,6 +115,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
       MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
       PROJECT_ID: ${{ needs.project.outputs.project_id }}
       FABRIC_API_ID: ${{ needs.project.outputs.fabric_api_id }}
