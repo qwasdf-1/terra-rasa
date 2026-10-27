@@ -9,6 +9,14 @@ __pycache__/
 .pytest_cache/
 testing/.venv/
 
-# Local design and research material. The distributable repository tracks
-# implementation and feature reference documentation only.
+# Per-checkout agent guidance and operator work records. Tracked reference
+# documentation remains part of the distributable repository.
+/AGENTS.md
+/CLAUDE.md
+/docs/issue-ledger.md
+/docs/open-work.md
+/docs/TODOS.md
+/docs/work-register.md
+/docs/archive/
+/docs/local/
 /docs/design/

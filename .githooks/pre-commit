@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -eu
+repo_root="$(git rev-parse --show-toplevel)"
+python3 "$repo_root/scripts/check_doc_boundary.py" --staged
