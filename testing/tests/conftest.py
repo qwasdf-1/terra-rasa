@@ -22,8 +22,8 @@ def server(env, request):
     process = make_server(env, request.module.__name__.rsplit(".", 1)[-1], request.module)
     process.start()
     yield process
-    problems = process.suspicious_lines(allow=getattr(request.module, "ALLOWED_LOG", ()))
     process.stop()
+    problems = process.suspicious_lines(allow=getattr(request.module, "ALLOWED_LOG", ()))
     assert not problems, "unexpected errors in the server log:\n" + "\n".join(problems)
 
 

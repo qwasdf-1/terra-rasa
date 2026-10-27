@@ -3,12 +3,11 @@ package dev.terrarasa.session;
 import java.util.ArrayList;
 import java.util.List;
 
+import dev.terrarasa.MinecraftCompat;
 import dev.terrarasa.mixin.ServerFunctionManagerAccessor;
 import dev.terrarasa.mixin.StatsCounterAccessor;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.advancements.AdvancementProgress;
-import net.minecraft.core.Holder;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
@@ -18,12 +17,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.stats.ServerStatsCounter;
 import net.minecraft.stats.Stat;
-import net.minecraft.world.clock.WorldClock;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
-import net.minecraft.world.entity.npc.wanderingtrader.WanderingTraderSpawner;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
 import net.minecraft.world.level.GameType;
-import net.minecraft.world.level.saveddata.WanderingTraderData;
 import net.minecraft.world.level.storage.CommandStorage;
 import net.minecraft.world.scores.Objective;
 import net.minecraft.world.scores.PlayerTeam;
@@ -61,25 +57,7 @@ public final class SessionReset {
             server.getCustomBossEvents().remove(event);
         }
 
-        var scheduled = server.getScheduledEvents();
-        for (String id : new ArrayList<>(scheduled.getEventsIds())) {
-            scheduled.remove(id);
-        }
-
-        // Sequences are re-derived lazily from the (new) world seed.
-        server.getRandomSequences().clear();
-
-        // A fresh world starts at time zero with clear weather.
-        server.setWeatherParameters(0, 0, false, false);
-        for (Holder<WorldClock> clock : server.registryAccess().lookupOrThrow(Registries.WORLD_CLOCK).listElements().toList()) {
-            server.clockManager().setTotalTicks(clock, 0L);
-        }
-        server.getPlayerList().broadcastAll(server.clockManager().createFullSyncPacket());
-
-        // The wandering trader's timer is server-global saved data: start it over, as a new world does.
-        WanderingTraderData trader = server.getDataStorage().computeIfAbsent(WanderingTraderData.TYPE);
-        trader.setSpawnDelay(WanderingTraderSpawner.DEFAULT_SPAWN_DELAY);
-        trader.setSpawnChance(WanderingTraderSpawner.MIN_SPAWN_CHANCE);
+        MinecraftCompat.resetWorldRunState(server);
 
         // A new world runs #minecraft:load when it opens. Data packs keep their setup there (objectives,
         // storage, boss bars, self-rescheduling loops), all of which were just cleared, so run it again on
@@ -119,7 +97,7 @@ public final class SessionReset {
         player.setAirSupply(player.getMaxAirSupply());
         player.resetFallDistance();
         player.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
-        for (String tag : List.copyOf(player.entityTags())) {
+        for (String tag : List.copyOf(dev.terrarasa.MinecraftCompat.entityTags(player))) {
             player.removeTag(tag);
         }
         player.setRespawnPosition(null, false);

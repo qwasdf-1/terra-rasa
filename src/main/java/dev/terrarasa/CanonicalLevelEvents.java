@@ -14,8 +14,8 @@ import net.minecraft.server.level.ServerLevel;
  * <p>Every activation replaces each resettable canonical level with a new object under the same key, and
  * so does a rollback: the restored levels are rebuilt from the previous run's data. A mod that caches a
  * level must drop or rebind that reference on {@link #REPLACED}, or it keeps operating on a closed level.
- * Fabric's {@code ServerLevelEvents.UNLOAD} and {@code LOAD} fire as well; these events add the pairing
- * between the old and new objects and fire once per swap.
+ * Fabric's corresponding world load and unload events fire as well; these events add the pairing between
+ * the old and new objects and fire once per swap.
  */
 public final class CanonicalLevelEvents {
     /**

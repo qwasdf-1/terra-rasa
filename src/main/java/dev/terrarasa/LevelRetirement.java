@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.concurrent.locks.LockSupport;
 
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
@@ -24,7 +23,7 @@ public final class LevelRetirement {
         if (!level.players().isEmpty()) {
             throw new LifecycleException("Refusing to retire " + level.dimension().identifier() + " with players inside");
         }
-        ServerLevelEvents.UNLOAD.invoker().onLevelUnload(server, level);
+        MinecraftCompat.levelUnloaded(server, level);
         level.noSave = false;
         ServerChunkCache chunkSource = level.getChunkSource();
         long deadline = System.nanoTime() + timeout.toNanos();

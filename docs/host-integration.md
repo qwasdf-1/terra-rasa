@@ -47,6 +47,7 @@ WorldPreparationService preparation = new WorldPreparationService(
     Duration.ofSeconds(60),
     player -> sendToServiceDimension(server, player)
 );
+preparation.setReadyLimit(3);    // keep up to three closed future runs; default is one
 CanonicalActivationService activation = new CanonicalActivationService(
     paths, Duration.ofSeconds(60)
 );
@@ -54,7 +55,7 @@ CanonicalActivationService activation = new CanonicalActivationService(
 preparation.loadFromDisk(server, policy);
 ```
 
-Call `loadFromDisk` after server levels have opened. Terra Rasa already reconciles its activation journal before vanilla opens any dimension. `loadFromDisk` adopts a staged run only if it is complete and its game version, selected data packs, world-generation settings, and resettable level definitions still match.
+Call `loadFromDisk` after server levels have opened. Set the ready limit before loading. Terra Rasa already reconciles its activation journal before vanilla opens any dimension. `loadFromDisk` adopts up to that many staged runs only if each is complete and its game version, selected data packs, world-generation settings, and resettable level definitions still match. Adopted runs are ordered FIFO using their durable creation time.
 
 The `sendToServiceDimension` callback is a last-resort evacuation target if a player was manually teleported into a staging dimension. It is not a substitute for moving normal players out of all resettable dimensions before activation.
 
@@ -66,11 +67,11 @@ Start a preparation on the server thread:
 preparation.begin(server, seed, policy);
 ```
 
-Call `preparation.tick(server)` at the end of each server tick while your host is active. It creates one staged level at a time and spreads spawn search, chunk loading, generation, and saving across ticks. Use `isPreparing()` and `progress()` for status. A `RunManifest` is available through `ready()` only after every staged level has been saved and closed.
+Call `preparation.tick(server)` at the end of each server tick while your host is active. It prepares one run at a time and creates one staged level at a time, spreading spawn search, chunk loading, generation, and saving across ticks. The service keeps a FIFO queue of up to three closed, durable runs; configure its capacity with `setReadyLimit(...)` (default one), inspect it with `readyRuns()` and `readyCount()`, and activate the oldest with `takeReady()`. A `RunManifest` appears in `readyRuns()` only after every staged level has been saved and closed. `setPregenerationRadii(...)` changes the configuration captured by preparations begun afterward.
 
 If a start is requested while optional pregeneration is running, call `finishSoon()`. It stops the background area work once the prepared spawn is usable; unfinished pregeneration continues in the live dimensions after activation. `constructNow(server)` is optional when the host already has players waiting: it constructs any levels that are still in the creation phase immediately, which can move that non-spreadable work into a planned pause.
 
-At startup, adopt a manifest from `ready()` if one is available. If preparation fails, `lastFailure()` gives the reason. `fail(server, reason)` cancels an active preparation and removes its staged levels.
+At startup, adopt any compatible manifests that fit the configured pool. If preparation fails, `lastFailure()` gives the reason. `fail(server, reason)` cancels an active preparation and removes its staged levels. `discardReady(runId)` and `discardAllReady()` remove queued runs and their staged data. If activation rolls back, `restoreReady(manifest)` puts that run at the front of the queue.
 
 ## 4. Activate a ready run
 

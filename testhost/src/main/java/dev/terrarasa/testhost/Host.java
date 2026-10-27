@@ -10,6 +10,7 @@ import com.google.gson.JsonObject;
 import dev.terrarasa.ActivationJournal;
 import dev.terrarasa.CanonicalActivationService;
 import dev.terrarasa.DimensionPolicy;
+import dev.terrarasa.MinecraftCompat;
 import dev.terrarasa.FaultInjection;
 import dev.terrarasa.LifecycleException;
 import dev.terrarasa.LivePregeneration;
@@ -166,7 +167,7 @@ final class Host {
 
     JsonObject status() {
         JsonObject json = new JsonObject();
-        json.addProperty("globalSeed", this.server.getWorldGenSettings().options().seed());
+        json.addProperty("globalSeed", MinecraftCompat.worldSeed(this.server));
         json.add("levels", CanonicalActivationService.describeLevels(this.server, this.policy));
         json.add("preparation", this.preparation.describe());
         json.add("pregeneration", LivePregeneration.describe());

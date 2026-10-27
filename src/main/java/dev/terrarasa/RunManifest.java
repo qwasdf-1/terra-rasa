@@ -24,6 +24,8 @@ public final class RunManifest {
     public long seed;
     public String minecraftVersion;
     public String fingerprint;
+    /** Stable FIFO ordering for a persisted ready-run pool. */
+    public long createdAtMillis;
     public PreparationState state = PreparationState.CREATING;
     public List<Dimension> dimensions = new ArrayList<>();
     public Spawn spawn;
@@ -40,6 +42,7 @@ public final class RunManifest {
         manifest.seed = seed;
         manifest.minecraftVersion = minecraftVersion;
         manifest.fingerprint = fingerprint;
+        manifest.createdAtMillis = System.currentTimeMillis();
         return manifest;
     }
 

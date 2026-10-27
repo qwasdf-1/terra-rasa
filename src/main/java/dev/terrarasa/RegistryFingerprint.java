@@ -38,7 +38,7 @@ public final class RegistryFingerprint {
             throw new IllegalStateException(e);
         }
         update(digest, "version=" + SharedConstants.getCurrentVersion().id());
-        update(digest, "structures=" + server.getWorldGenSettings().options().generateStructures());
+        update(digest, "structures=" + MinecraftCompat.generateStructures(server));
         server.getPackRepository().getSelectedIds().stream().sorted().forEach(pack -> update(digest, "pack=" + pack));
 
         RegistryOps<JsonElement> ops = server.registryAccess().createSerializationContext(JsonOps.INSTANCE);

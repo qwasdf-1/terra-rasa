@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,7 +26,6 @@ import java.util.stream.Stream;
 
 import com.google.gson.JsonObject;
 import dev.terrarasa.mixin.MinecraftServerAccessor;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
@@ -36,12 +36,13 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.PlayerSpawnFinder;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
-import net.minecraft.util.Util;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.LevelStem;
+import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -54,6 +55,7 @@ import org.jspecify.annotations.Nullable;
  * {@link PreparationState#CLOSED_READY}.
  */
 public final class WorldPreparationService {
+    public static final int MAX_READY_RUNS = 3;
     /** Non-persistent loading ticket: preload tickets must never leak into saved ticket data. */
     public static final TicketType PRELOAD_TICKET = Registry.register(BuiltInRegistries.TICKET_TYPE,
             Identifier.fromNamespaceAndPath(TerraRasa.MOD_ID, "preload"), new TicketType(0L, TicketType.FLAG_LOADING));
@@ -73,7 +75,7 @@ public final class WorldPreparationService {
     private final WorldPaths paths;
     private final int preloadRadius;
     /** Pregeneration radius in blocks per resettable dimension; missing or 0 means none. */
-    private final Map<Identifier, Integer> pregenerationRadii;
+    private Map<Identifier, Integer> pregenerationRadii;
     private final Duration timeout;
     private final Duration drainTimeout;
     private final Consumer<ServerPlayer> evacuator;
@@ -85,7 +87,9 @@ public final class WorldPreparationService {
     });
     private CompletableFuture<Void> lastManifestWrite = CompletableFuture.completedFuture(null);
     private @Nullable Preparation active;
-    private @Nullable RunManifest ready;
+    /** Closed, durable runs waiting for activation, in FIFO order. */
+    private final ArrayDeque<RunManifest> ready = new ArrayDeque<>();
+    private int readyLimit = 1;
     private @Nullable String lastFailure;
 
     /**
@@ -119,6 +123,25 @@ public final class WorldPreparationService {
         return this.active != null;
     }
 
+    /** Updates the radii captured by preparations started after this call. */
+    public void setPregenerationRadii(Map<Identifier, Integer> radii) {
+        this.pregenerationRadii = Map.copyOf(radii);
+    }
+
+    /** Stops bookkeeping and flushes manifests; vanilla closes the registered levels and their tickets. */
+    public void onServerStopping(MinecraftServer server) {
+        if (!server.isSameThread()) {
+            throw new IllegalStateException("Server shutdown must run on the server thread");
+        }
+        Preparation preparation = this.active;
+        if (preparation != null) {
+            setActive(null);
+            this.lastFailure = "server is stopping";
+        }
+        this.manifestWriter.shutdown();
+        awaitManifestWrites();
+    }
+
     /**
      * True while any preparation is in progress. Vanilla pauses an empty server after
      * {@code pause-when-empty-seconds}, which would freeze chunk generation halfway; the server stays
@@ -146,7 +169,31 @@ public final class WorldPreparationService {
     }
 
     public Optional<RunManifest> ready() {
-        return Optional.ofNullable(this.ready);
+        return Optional.ofNullable(this.ready.peekFirst());
+    }
+
+    public List<RunManifest> readyRuns() {
+        return List.copyOf(this.ready);
+    }
+
+    public int readyCount() {
+        return this.ready.size();
+    }
+
+    public int readyLimit() {
+        return this.readyLimit;
+    }
+
+    /** Sets how many closed future runs are kept, deleting newest excess runs when reducing the limit. */
+    public void setReadyLimit(int limit) {
+        if (limit < 1 || limit > MAX_READY_RUNS) {
+            throw new IllegalArgumentException("ready run limit must be between 1 and " + MAX_READY_RUNS);
+        }
+        this.readyLimit = limit;
+        while (this.ready.size() > limit) {
+            RunManifest discarded = this.ready.removeLast();
+            deleteStageData(discarded.runUuid());
+        }
     }
 
     public @Nullable String activeFingerprint() {
@@ -159,16 +206,38 @@ public final class WorldPreparationService {
 
     /** Hands the ready run to activation. If activation rolls back, {@link #restoreReady} returns it. */
     public RunManifest takeReady() {
-        RunManifest manifest = this.ready;
+        RunManifest manifest = this.ready.peekFirst();
         if (manifest == null) {
             throw new IllegalStateException("No prepared run is ready");
         }
-        this.ready = null;
+        this.ready.removeFirst();
         return manifest;
     }
 
     public void restoreReady(RunManifest manifest) {
-        this.ready = manifest;
+        if (this.ready.stream().noneMatch(item -> item.runId.equals(manifest.runId))) {
+            this.ready.addFirst(manifest);
+        }
+    }
+
+    /** Removes one queued run from the pool and deletes its durable staged data. */
+    public boolean discardReady(UUID runId) {
+        for (Iterator<RunManifest> iterator = this.ready.iterator(); iterator.hasNext();) {
+            RunManifest manifest = iterator.next();
+            if (manifest.runUuid().equals(runId)) {
+                iterator.remove();
+                deleteStageData(runId);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Removes and deletes all queued runs. */
+    public void discardAllReady() {
+        while (!this.ready.isEmpty()) {
+            deleteStageData(this.ready.removeFirst().runUuid());
+        }
     }
 
     /**
@@ -207,18 +276,33 @@ public final class WorldPreparationService {
                 TerraRasa.LOGGER.error("Could not list staged dimension data", e);
             }
         }
+        Map<UUID, RunManifest> manifests = new LinkedHashMap<>();
         for (UUID runId : candidates) {
-            Optional<RunManifest> manifest = readManifest(runId);
+            readManifest(runId).ifPresent(manifest -> manifests.put(runId, manifest));
+        }
+        candidates.sort(Comparator.comparingLong((UUID runId) -> {
+            RunManifest manifest = manifests.get(runId);
+            if (manifest != null && manifest.createdAtMillis > 0) {
+                return manifest.createdAtMillis;
+            }
+            try {
+                return Files.getLastModifiedTime(this.paths.manifest(runId)).toMillis();
+            } catch (IOException e) {
+                return Long.MAX_VALUE;
+            }
+        }).thenComparing(UUID::toString));
+        for (UUID runId : candidates) {
+            Optional<RunManifest> manifest = Optional.ofNullable(manifests.get(runId));
             boolean adoptable = manifest.isPresent()
                     && manifest.get().state == PreparationState.CLOSED_READY
                     && fingerprint.equals(manifest.get().fingerprint)
                     && sameTargets(manifest.get(), policy)
                     && manifest.get().dimensions.stream().allMatch(d -> Files.isDirectory(
                             this.paths.dimension(Identifier.parse(d.stage))))
-                    && this.ready == null;
+                    && this.ready.size() < this.readyLimit;
             if (adoptable) {
-                this.ready = manifest.get();
-                TerraRasa.LOGGER.info("Adopted prepared run {} (seed {}) from disk", runId, this.ready.seed);
+                this.ready.addLast(manifest.get());
+                TerraRasa.LOGGER.info("Adopted prepared run {} (seed {}) from disk", runId, manifest.get().seed);
             } else {
                 TerraRasa.LOGGER.info("Discarding stale or incomplete staged run {}", runId);
                 deleteStageData(runId);
@@ -236,6 +320,9 @@ public final class WorldPreparationService {
         if (this.active != null) {
             throw new LifecycleException("A run is already being prepared");
         }
+        if (this.ready.size() >= this.readyLimit) {
+            throw new LifecycleException("The prepared run pool is full (" + this.ready.size() + "/" + this.readyLimit + ")");
+        }
         Registry<LevelStem> stems = server.registryAccess().lookupOrThrow(Registries.LEVEL_STEM);
         List<Identifier> stemIds = stems.keySet().stream().toList();
         List<String> problems = policy.validate(stemIds);
@@ -248,7 +335,7 @@ public final class WorldPreparationService {
         RunManifest manifest = RunManifest.create(runId, seed, SharedConstants.getCurrentVersion().id(),
                 RegistryFingerprint.compute(server, policy));
         manifest.preloadRadius = preloadRadius;
-        Preparation preparation = new Preparation(runId, seed, manifest, preloadRadius);
+        Preparation preparation = new Preparation(runId, seed, manifest, preloadRadius, this.pregenerationRadii);
         setActive(preparation);
         this.lastFailure = null;
         try {
@@ -282,11 +369,18 @@ public final class WorldPreparationService {
             return;
         }
         try {
+            if (preparation.state == PreparationState.PUBLISHING
+                    && preparation.phaseElapsedMillis() > this.drainTimeout.toMillis()) {
+                throw new LifecycleException("Timed out publishing the prepared run manifest");
+            }
             if (preparation.elapsed().compareTo(this.timeout) > 0) {
-                if (preparation.state != PreparationState.PREGENERATING) {
+                if (preparation.state == PreparationState.PREGENERATING) {
+                    // The spawn is ready; the overall deadline only stops optional area pregeneration.
+                    preparation.finishRequested = true;
+                } else if (preparation.state != PreparationState.FLUSHING
+                        && preparation.state != PreparationState.PUBLISHING) {
                     throw new LifecycleException("Preparation timed out in state " + preparation.state);
                 }
-                preparation.finishRequested = true;
             }
             PreparationState state = preparation.state;
             long started = System.nanoTime();
@@ -340,7 +434,7 @@ public final class WorldPreparationService {
         if (next != null) {
             ServerLevel level = LevelFactory.createStaged(server, next.key(), next.stem(), preparation.seed);
             ((MinecraftServerAccessor) server).terrarasa$levels().put(next.key(), level);
-            ServerLevelEvents.LOAD.invoker().onLevelLoad(server, level);
+            MinecraftCompat.levelLoaded(server, level);
             preparation.levels.put(next.target(), level);
             return;
         }
@@ -352,18 +446,16 @@ public final class WorldPreparationService {
 
     private void tickSpawnFinding(Preparation preparation) {
         ServerLevel overworld = preparation.overworld();
-        ServerChunkCache chunkSource = overworld.getChunkSource();
         if (preparation.spawnSearchCenter == null) {
-            // Vanilla's climate search samples the noise thousands of times; it is pure computation on a
-            // thread-safe sampler, so it runs on a worker instead of the server thread.
+            // Vanilla performs its climate search off-thread and returns the selected spawn position.
             if (preparation.climateSearch == null) {
-                preparation.climateSearch = CompletableFuture.supplyAsync(
-                        () -> chunkSource.randomState().sampler().findSpawnPosition(), Util.backgroundExecutor());
+                preparation.climateSearch = PlayerSpawnFinder.findSpawn(overworld, BlockPos.ZERO);
             }
             if (!preparation.climateSearch.isDone()) {
                 return;
             }
-            preparation.spawnSearchCenter = ChunkPos.containing(preparation.climateSearch.join());
+            Vec3 spawn = preparation.climateSearch.join();
+            preparation.spawnSearchCenter = MinecraftCompat.chunkAt(BlockPos.containing(spawn.x, 0, spawn.z));
             preparation.chunks.add(overworld, preparation.spawnSearchCenter, SPAWN_SEARCH_RADIUS);
             return;
         }
@@ -380,7 +472,7 @@ public final class WorldPreparationService {
         }
         preparation.manifest.spawn = new RunManifest.Spawn(spawn.getX(), spawn.getY(), spawn.getZ());
         preparation.manifest.timingsMillis.put("spawn_finding", preparation.phaseElapsedMillis());
-        preparation.preloadCenter = ChunkPos.containing(spawn);
+        preparation.preloadCenter = MinecraftCompat.chunkAt(spawn);
         preparation.chunks.add(overworld, preparation.preloadCenter, preparation.preloadRadius);
         preparation.enter(PreparationState.PRELOADING);
     }
@@ -402,7 +494,7 @@ public final class WorldPreparationService {
         preparation.manifest.timingsMillis.put("preloading", preparation.phaseElapsedMillis());
         BlockPos spawn = new BlockPos(preparation.manifest.spawn.x, preparation.manifest.spawn.y, preparation.manifest.spawn.z);
         for (Map.Entry<Identifier, ServerLevel> staged : preparation.levels.entrySet()) {
-            int radius = this.pregenerationRadii.getOrDefault(staged.getKey(), 0);
+            int radius = preparation.pregenerationRadii.getOrDefault(staged.getKey(), 0);
             if (radius > 0) {
                 PregenerationTask task = PregenerationTask.around(staged.getKey(), staged.getValue(), spawn, radius);
                 preparation.manifest.pregeneration.add(task);
@@ -484,10 +576,10 @@ public final class WorldPreparationService {
         }
         RunManifest manifest = preparation.manifest;
         setActive(null);
-        if (this.ready == null) {
-            this.ready = manifest;
+        if (this.ready.size() < this.readyLimit) {
+            this.ready.addLast(manifest);
         } else {
-            // A pool of size one: keep the older ready run, discard this one.
+            // The capacity may have been lowered while this preparation was running.
             deleteStageData(preparation.runId);
         }
         TerraRasa.LOGGER.info("Run {} is prepared (seed {}, spawn {} {} {}) in {} ms", preparation.runId, manifest.seed,
@@ -586,9 +678,11 @@ public final class WorldPreparationService {
             }
             json.add("active", active);
         }
-        RunManifest manifest = this.ready;
-        if (manifest != null) {
-            json.add("ready", Json.GSON.toJsonTree(manifest));
+        json.addProperty("readyCount", this.ready.size());
+        json.addProperty("readyLimit", this.readyLimit);
+        if (!this.ready.isEmpty()) {
+            json.add("ready", Json.GSON.toJsonTree(this.ready.peekFirst()));
+            json.add("readyRuns", Json.GSON.toJsonTree(this.ready));
         }
         if (this.lastFailure != null) {
             json.addProperty("lastFailure", this.lastFailure);
@@ -600,7 +694,7 @@ public final class WorldPreparationService {
     public float progress() {
         Preparation preparation = this.active;
         if (preparation == null) {
-            return this.ready != null ? 1.0F : 0.0F;
+            return !this.ready.isEmpty() ? 1.0F : 0.0F;
         }
         return switch (preparation.state) {
             case CREATING, SPAWN_FINDING -> 0.05F;
@@ -609,6 +703,40 @@ public final class WorldPreparationService {
             case FLUSHING -> 0.97F;
             default -> 1.0F;
         };
+    }
+
+    /** Short player-facing description of the active preparation phase. */
+    public String progressDescription() {
+        Preparation preparation = this.active;
+        if (preparation == null) {
+            return this.ready.isEmpty() ? "Not preparing"
+                    : "Ready (" + this.ready.size() + " future run" + (this.ready.size() == 1 ? "" : "s") + ")";
+        }
+        return switch (preparation.state) {
+            case CREATING -> "Creating run worlds…";
+            case SPAWN_FINDING -> "Finding a run spawn…";
+            case PRELOADING -> "Loading the spawn area…";
+            case PREGENERATING -> pregenerationDescription(preparation);
+            case FLUSHING -> "Saving prepared worlds…";
+            case PUBLISHING -> "Finalizing the prepared run…";
+            default -> "Preparing run worlds…";
+        };
+    }
+
+    private static String pregenerationDescription(Preparation preparation) {
+        int done = 0;
+        int total = 0;
+        for (Pregenerator pregenerator : preparation.pregenerators) {
+            PregenerationTask task = pregenerator.snapshot();
+            done += task.next;
+            total += task.total();
+        }
+        if (total == 0) {
+            return "Pregenerating run worlds…";
+        }
+        // Five-point steps keep the host's periodic progress message useful without flooding chat.
+        int percent = Math.min(100, Math.round(done * 20.0F / total) * 5);
+        return "Pregenerating run worlds… " + percent + "%";
     }
 
     private Optional<RunManifest> readManifest(UUID runId) {
@@ -632,8 +760,8 @@ public final class WorldPreparationService {
     private static int countFull(ServerLevel level, ChunkPos center, int radius) {
         ServerChunkCache chunkSource = level.getChunkSource();
         int full = 0;
-        for (int x = center.x() - radius; x <= center.x() + radius; x++) {
-            for (int z = center.z() - radius; z <= center.z() + radius; z++) {
+        for (int x = MinecraftCompat.chunkX(center) - radius; x <= MinecraftCompat.chunkX(center) + radius; x++) {
+            for (int z = MinecraftCompat.chunkZ(center) - radius; z <= MinecraftCompat.chunkZ(center) + radius; z++) {
                 if (chunkSource.getChunkNow(x, z) != null) {
                     full++;
                 }
@@ -652,6 +780,7 @@ public final class WorldPreparationService {
         final long seed;
         final RunManifest manifest;
         final int preloadRadius;
+        final Map<Identifier, Integer> pregenerationRadii;
         final Map<Identifier, ServerLevel> levels = new LinkedHashMap<>();
         final StagedChunkTickets chunks = new StagedChunkTickets(PRELOAD_TICKET);
         final List<Pregenerator> pregenerators = new ArrayList<>();
@@ -659,7 +788,7 @@ public final class WorldPreparationService {
         private @Nullable CompletableFuture<Void> ioFlush;
         final ArrayDeque<StagedLevel> toConstruct = new ArrayDeque<>();
         @Nullable SpawnSpiral spawnSearch;
-        @Nullable CompletableFuture<BlockPos> climateSearch;
+        @Nullable CompletableFuture<Vec3> climateSearch;
         @Nullable CompletableFuture<Void> published;
         final long startedNanos = System.nanoTime();
         PreparationState state = PreparationState.CREATING;
@@ -668,11 +797,13 @@ public final class WorldPreparationService {
         @Nullable ChunkPos preloadCenter;
         int preloadedChunks;
 
-        Preparation(UUID runId, long seed, RunManifest manifest, int preloadRadius) {
+        Preparation(UUID runId, long seed, RunManifest manifest, int preloadRadius,
+                Map<Identifier, Integer> pregenerationRadii) {
             this.runId = runId;
             this.seed = seed;
             this.manifest = manifest;
             this.preloadRadius = preloadRadius;
+            this.pregenerationRadii = Map.copyOf(pregenerationRadii);
         }
 
         ServerLevel overworld() {

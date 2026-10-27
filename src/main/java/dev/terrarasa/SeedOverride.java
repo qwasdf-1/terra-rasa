@@ -36,6 +36,11 @@ public final class SeedOverride {
         return pending != null && pending.dimension().equals(dimension) ? pending.seed() : null;
     }
 
+    /** Returns whether a staged server level is being constructed on this thread. */
+    public static boolean isConstructingStagedLevel() {
+        return PENDING.get() != null;
+    }
+
     /** Implemented by {@code ServerLevel} through a mixin. */
     public interface Holder {
         @Nullable Long terrarasa$seedOverride();

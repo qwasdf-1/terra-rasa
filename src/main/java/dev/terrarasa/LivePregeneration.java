@@ -110,7 +110,13 @@ public final class LivePregeneration {
     }
 
     static void onServerStopping() {
-        pause();
+        // The server is about to close these levels. Snapshot progress, but leave their tickets alone;
+        // releasing tickets here mutates DistanceManager while vanilla is entering its shutdown ticks.
+        for (Map.Entry<PregenerationTask, Pregenerator> entry : RUNNING.entrySet()) {
+            entry.getKey().next = entry.getValue().snapshot().next;
+            entry.getValue().abandon();
+        }
+        RUNNING.clear();
         save(true);
         TASKS.clear();
     }
