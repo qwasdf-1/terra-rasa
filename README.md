@@ -1,6 +1,6 @@
 # Terra Rasa
 
-Terra Rasa is a Fabric library for replacing a dedicated server's worlds while the server keeps running. It prepares fresh, seeded dimensions in the background, then promotes them under their **real canonical dimension keys**. Players stay connected, and vanilla continues to see `minecraft:overworld`, `minecraft:the_nether`, and `minecraft:the_end` as the active worlds.
+Terra Rasa is a Fabric library for replacing dedicated or integrated server worlds while the server keeps running. It prepares fresh, seeded dimensions in the background, then promotes them under their **real canonical dimension keys**. Players stay connected, and vanilla continues to see `minecraft:overworld`, `minecraft:the_nether`, and `minecraft:the_end` as the active worlds.
 
 That canonical identity is the key difference from temporary-world or dimension-alias approaches: vanilla itself continues to own portal travel, spawn selection, the End fight and gateways, credits, `/seed`, advancements, and data packs that target those dimensions. Terra Rasa replaces the levels behind the keys; it does not emulate each feature around a temporary dimension.
 
@@ -32,7 +32,7 @@ Terra Rasa provides a separate build for each supported Minecraft version:
 | 26.2 | 25 | 1.18.4 | 0.161.0+26.2 |
 | 26.3 | 25 | 1.18.4 | 0.165.0+26.3 |
 
-Each build uses Fabric Loader 0.19.5. The full target list is maintained in [`gradle/minecraft-targets.json`](gradle/minecraft-targets.json), and CI builds every target. Terra Rasa is a dedicated-server library; clients can remain vanilla.
+Each build uses Fabric Loader 0.19.5. The full target list is maintained in [`gradle/minecraft-targets.json`](gradle/minecraft-targets.json), and CI builds every target. Terra Rasa 0.3.0 supports dedicated servers and integrated single-player/LAN hosts across the listed targets. A rendered 26.2 single-player smoke test through Soul Link passed; vanilla LAN guest login remains unverified. The host needs Terra Rasa installed in the client profile for integrated play; remote LAN guests can remain vanilla.
 
 ## Add it to a host mod
 

@@ -21,8 +21,10 @@ manifest marks a run ready; an activation journal supports crash recovery.
 ## Boundaries
 
 Terra Rasa does not own gameplay rules, command UX, player destinations, or a
-host's choice to reset session state. Those belong to the consuming mod. It is a
-dedicated-server library; vanilla clients do not install it separately when it
-is bundled into a host mod. Integrated single-player and LAN hosting are
-outside the current 0.2 release scope; they need client-capable Fabric metadata
-and testing against an integrated server, beyond the dedicated-server checks.
+host's choice to reset session state. Those belong to the consuming mod. Version
+0.3.0 supports dedicated and integrated servers. For single-player or LAN, the
+host must have the mod installed in the client profile. Remote LAN guests do not
+need Terra Rasa when it is embedded in a host mod. A rendered 26.2 integrated
+single-player smoke test through Soul Link passed through Terra Rasa activation.
+Full lifecycle checks on the other targets and vanilla LAN guest login remain
+pending; current automated test evidence covers dedicated servers.
