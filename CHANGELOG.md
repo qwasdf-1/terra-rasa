@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0
+
 ### Added
 
 - Separate builds for Minecraft 1.21.11 and 26.1 through 26.3, with version-specific adapters for level construction, seeds, storage paths, lifecycle events, and mixins.
@@ -10,6 +12,14 @@
 
 - Maven artifacts now include the Minecraft target in their artifact ID so builds for different game versions can coexist.
 - GitHub releases now bundle every supported target, and Modrinth publishes one target-specific version per jar with checksum-verified, retry-safe uploads.
+- Add phase-specific preparation progress, including visible flush and finalization states, instead of reporting a static 97% during disk flushing.
+- Bound final manifest publication separately from spawn generation and allow optional pregeneration to stop at its deadline without failing a prepared spawn.
+- Let hosts update per-dimension pregeneration radii for preparations started afterward.
+- Use a concurrent cache for Minecraft's shared jigsaw structure palettes so parallel chunk generation cannot crash while a prepared world and the active world generate together.
+- Process distance-manager chunk updates from stable batches so status callbacks cannot invalidate the iterator or drop newly queued work.
+- Preserve recoverable staging data during shutdown and let vanilla close its levels and tickets; resumed startup recovery handles interrupted preparation.
+- Add a configurable FIFO pool of up to three durable prepared runs, adopted in creation order after restart.
+- When C2ME's density-function compiler is present, skip diagnostic DOT graph generation during staged-level construction while keeping compiled density functions enabled; regular level construction still produces the graphs.
 
 ## 0.1.0
 

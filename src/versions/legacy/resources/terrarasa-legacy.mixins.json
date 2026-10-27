@@ -2,7 +2,9 @@
   "required": true,
   "package": "dev.terrarasa.mixin",
   "mixins": [
+    "C2meDfcGraphDumpMixin",
     "ChunkMapAccessor",
+    "DistanceManagerMixin",
     "EntityStorageAccessor",
     "MinecraftServerAccessor",
     "MinecraftServerMixin",
@@ -13,6 +15,7 @@
     "ServerLevelAccessor",
     "ServerLevelMixin",
     "StatsCounterAccessor",
+    "StructureTemplatePaletteMixin",
     "PrimaryLevelDataAccessor"
   ],
   "injectors": {
