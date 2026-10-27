@@ -58,7 +58,7 @@ public final class StartupRecovery {
             }
             CanonicalActivationService.setGlobalSeed(server, seed);
             if (journal.phase == ActivationJournal.Phase.COMMITTED) {
-                AtomicFiles.deleteRecursively(paths.quarantineRoot().resolve(journal.previousRunLabel));
+            AtomicFiles.deleteRecursively(paths.quarantineRun(journal.previousRunLabel));
             }
         } catch (IOException e) {
             throw new IllegalStateException("Terra Rasa could not recover activation of run " + journal.runId

@@ -3,6 +3,7 @@ package dev.terrarasa;
 import java.nio.file.Path;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.List;
 
 import dev.terrarasa.mixin.PrimaryLevelDataAccessor;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
@@ -52,6 +53,11 @@ public final class MinecraftCompat {
             return worldRoot.resolve("DIM1");
         }
         return worldRoot.resolve("dimensions").resolve(dimension.getNamespace()).resolve(dimension.getPath());
+    }
+
+    /** The legacy Overworld shares its root with global world files, so swap only these dimension stores. */
+    public static List<String> rootDimensionStorageParts(Identifier dimension) {
+        return Level.OVERWORLD.identifier().equals(dimension) ? List.of("region", "entities", "poi", "data") : List.of();
     }
 
     public static ChunkPos chunkAt(BlockPos pos) {

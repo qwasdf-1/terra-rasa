@@ -1,6 +1,7 @@
 package dev.terrarasa;
 
 import java.nio.file.Path;
+import java.util.List;
 
 import dev.terrarasa.mixin.MinecraftServerAccessor;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
@@ -43,6 +44,11 @@ public final class MinecraftCompat {
 
     public static Path dimensionPath(Path worldRoot, Identifier dimension) {
         return dimension.resolveAgainst(worldRoot.resolve("dimensions"));
+    }
+
+    /** Modern Minecraft gives every dimension its own directory. */
+    public static List<String> rootDimensionStorageParts(Identifier dimension) {
+        return List.of();
     }
 
     public static ChunkPos chunkAt(BlockPos pos) {

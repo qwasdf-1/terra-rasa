@@ -46,9 +46,10 @@ publishing {
 // The library alone does nothing; the test host drives it the way a game mod would.
 evaluationDependsOn(':testhost')
 def testServerDirectory = integrationRoot.map { it.dir('server') }
+def runtimeJarTask = obfuscatedMinecraft ? 'remapJar' : 'jar'
 def prepareIntegrationServer = registerServerInstall('prepareIntegrationServer',
         'Assembles a production-style Fabric dedicated server with Terra Rasa and its test host.',
-        testServerDirectory, files(tasks.named('jar'), project(':testhost').tasks.named('jar')))
+        testServerDirectory, files(tasks.named(runtimeJarTask), project(':testhost').tasks.named(runtimeJarTask)))
 
 registerSuite('integrationTest', 'Runs the real dedicated-server integration suite (Python harness in testing/).',
         testServerDirectory, prepareIntegrationServer, [])

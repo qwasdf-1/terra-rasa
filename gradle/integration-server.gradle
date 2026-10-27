@@ -34,6 +34,7 @@ def vanillaServerJarCandidates = [
     new File(gradle.gradleUserHomeDir, "caches/fabric-loom/${minecraftVersion}/minecraft-server.jar"),
     new File(System.getProperty('user.home'), ".gradle/caches/fabric-loom/${minecraftVersion}/minecraft-server.jar")
 ].unique()
+def vanillaServerJar = vanillaServerJarCandidates.find { it.isFile() } ?: vanillaServerJarCandidates.first()
 def javaLauncher = javaToolchains.launcherFor {
     languageVersion = JavaLanguageVersion.of(javaVersion)
 }
@@ -62,18 +63,17 @@ def generatePacketReport = tasks.register('generatePacketReport', Exec) {
     group = 'verification'
     description = 'Runs the vanilla data generator to produce protocol packet ids for the headless test client.'
     def outputDirectory = packetReportDirectory
-    def vanillaJar = vanillaServerJarCandidates.find { it.isFile() } ?: vanillaServerJarCandidates.first()
-    inputs.file(vanillaJar)
+    inputs.file(vanillaServerJar)
     outputs.file(outputDirectory.map { it.file('reports/packets.json') })
     def scratch = layout.buildDirectory.dir('tmp/generatePacketReport')
     workingDir(scratch)
     doFirst {
         scratch.get().asFile.mkdirs()
-        if (!vanillaJar.isFile()) {
-            throw new GradleException("Vanilla server jar not found at ${vanillaJar}; run ./gradlew build once so Loom caches it.")
+        if (!vanillaServerJar.isFile()) {
+            throw new GradleException("Vanilla server jar not found at ${vanillaServerJar}; run ./gradlew build once so Loom caches it.")
         }
         executable(javaLauncher.get().executablePath.asFile.absolutePath)
-        args('-DbundlerMainClass=net.minecraft.data.Main', '-jar', vanillaJar.absolutePath,
+        args('-DbundlerMainClass=net.minecraft.data.Main', '-jar', vanillaServerJar.absolutePath,
                 '--reports', '--output', outputDirectory.get().asFile.absolutePath)
     }
 }
@@ -83,7 +83,6 @@ ext.registerServerInstall = { String name, String descriptionText, Provider<Dire
         group = 'verification'
         description = descriptionText
         dependsOn(downloadFabricServerLauncher)
-        def vanillaJar = vanillaServerJarCandidates.find { it.isFile() } ?: vanillaServerJarCandidates.first()
         into(directory)
         from(mods) {
             into('mods')
@@ -100,7 +99,7 @@ ext.registerServerInstall = { String name, String descriptionText, Provider<Dire
         doFirst {
             def propertiesFile = launcherProperties.get().asFile
             propertiesFile.parentFile.mkdirs()
-            propertiesFile.text = vanillaJar.isFile() ? "serverJar=${vanillaJar.absolutePath.replace('\\', '/')}\n" : ''
+            propertiesFile.text = vanillaServerJar.isFile() ? "serverJar=${vanillaServerJar.absolutePath.replace('\\', '/')}\n" : ''
         }
         preserve {
             // Downloaded libraries and per-session worlds survive re-syncs.
@@ -127,6 +126,16 @@ ext.registerSuite = { String name, String descriptionText, Provider<Directory> d
             environment('MC_TEST_SERVER_DIR', directory.get().asFile.absolutePath)
             environment('MC_TEST_JAVA', javaLauncher.get().executablePath.asFile.absolutePath)
             environment('MC_TEST_PACKETS_JSON', reports.get().file('reports/packets.json').asFile.absolutePath)
+            // The protocol bot must announce the exact protocol used by this target. Read it from
+            // the same vanilla jar that generated packets.json instead of maintaining a version map.
+            new java.util.zip.ZipFile(vanillaServerJar).withCloseable { jar ->
+                def entry = jar.getEntry('version.json')
+                if (entry == null) {
+                    throw new GradleException("Minecraft server jar has no version.json: ${vanillaServerJar}")
+                }
+                def versionInfo = new groovy.json.JsonSlurper().parse(jar.getInputStream(entry))
+                environment('MC_TEST_PROTOCOL_VERSION', versionInfo.protocol_version.toString())
+            }
         }
     }
 }

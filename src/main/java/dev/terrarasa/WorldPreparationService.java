@@ -745,7 +745,7 @@ public final class WorldPreparationService {
             return Optional.empty();
         }
         try {
-            return Optional.of(RunManifest.load(file));
+            return Optional.of(RunManifest.load(file, runId));
         } catch (IOException e) {
             TerraRasa.LOGGER.warn("Unreadable manifest for {}", runId, e);
             return Optional.empty();

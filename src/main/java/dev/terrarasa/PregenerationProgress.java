@@ -19,6 +19,8 @@ import com.google.gson.reflect.TypeToken;
  * a writer thread, so the server thread only takes a snapshot; deleted once nothing is left.
  */
 final class PregenerationProgress {
+    private static final long MAX_FILE_BYTES = 1_048_576L;
+    private static final int MAX_TASKS = 256;
     private static final ExecutorService WRITER = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "Terra Rasa pregeneration writer");
         thread.setDaemon(true);
@@ -38,10 +40,27 @@ final class PregenerationProgress {
             return tasks;
         }
         try {
+            if (Files.size(this.file) > MAX_FILE_BYTES) {
+                throw new IOException("pregeneration progress file exceeds " + MAX_FILE_BYTES + " bytes");
+            }
             List<PregenerationTask> saved = Json.GSON.fromJson(Files.readString(this.file, StandardCharsets.UTF_8),
                     new TypeToken<List<PregenerationTask>>() { }.getType());
             if (saved != null) {
-                tasks.addAll(saved);
+                if (saved.size() > MAX_TASKS) {
+                    throw new IOException("pregeneration progress contains more than " + MAX_TASKS + " areas");
+                }
+                for (int index = 0; index < saved.size(); index++) {
+                    PregenerationTask task = saved.get(index);
+                    try {
+                        if (task == null) {
+                            throw new IllegalArgumentException("area is null");
+                        }
+                        task.validate();
+                        tasks.add(task);
+                    } catch (IllegalArgumentException e) {
+                        TerraRasa.LOGGER.warn("Ignoring invalid pregeneration area {} in {}: {}", index, this.file, e.getMessage());
+                    }
+                }
             }
         } catch (IOException | JsonParseException e) {
             TerraRasa.LOGGER.warn("Unreadable pregeneration progress {}; starting none", this.file, e);

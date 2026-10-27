@@ -85,7 +85,11 @@ def test_old_data_is_cleaned_up_after_commit(server):
             and not (server.library_data / "stages" / run_id).exists()
 
     wait_true(cleaned, 30, "post-commit cleanup")
-    assert any((server.world / "dimensions" / "minecraft" / "overworld" / "region").glob("*.mca"))
+    overworld_regions = (
+        server.world / "region",  # 1.21.11 stores Overworld chunks at the world root.
+        server.world / "dimensions" / "minecraft" / "overworld" / "region",
+    )
+    assert any(any(region.glob("*.mca")) for region in overworld_regions)
 
 
 def test_repeated_swaps_use_fresh_seeds_without_leaking_levels(server, players):

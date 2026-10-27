@@ -1,4 +1,4 @@
-"""Minimal Minecraft Java protocol primitives (protocol 776, Minecraft 26.2).
+"""Minimal Minecraft Java protocol primitives for the server under test.
 
 Packet ids are never hard-coded: they come from the vanilla data generator's ``packets.json`` report
 for the exact server jar under test.
@@ -9,13 +9,14 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import struct
 import uuid
 import zlib
 from pathlib import Path
 from typing import Any
 
-PROTOCOL_VERSION = 776
+PROTOCOL_VERSION = int(os.environ.get("MC_TEST_PROTOCOL_VERSION", "776"))
 
 
 class PacketIds:
