@@ -14,6 +14,13 @@ Use Java 21 and Loom 1.17.21 for Minecraft 1.21.11, or Java 25 and Loom 1.18.4 f
 
 CI runs `./gradlew build` on every push and pull request; the integration suite runs on manual dispatch. Run it locally before opening a pull request that changes the lifecycle.
 
+## Repository Checks
+
+Run `sh scripts/install-git-hooks.sh` once per checkout to enable the local
+pre-commit check. The hook checks the staged tree. Run
+`python3 scripts/check_doc_boundary.py` to audit the working copy, including
+non-ignored untracked documents.
+
 ## Changes
 
 - Behaviour a host can observe needs an integration test. Drive it through the [test host](testhost/src/main/java/dev/terrarasa/testhost/Host.java), which wires the library the way a game mod does, and assert through `/terrarasa status`. Each module fails on unexpected `ERROR` lines in the server log.

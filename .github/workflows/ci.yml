@@ -17,6 +17,13 @@ jobs:
       - id: targets
         run: echo "matrix=$(jq -c . gradle/minecraft-targets.json)" >> "$GITHUB_OUTPUT"
 
+  documentation-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check local documentation boundary
+        run: python3 scripts/check_doc_boundary.py
+
   build:
     needs: targets
     runs-on: ubuntu-latest

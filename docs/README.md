@@ -12,8 +12,7 @@
 | [Reference index](reference/README.md) | Navigation for maintained library references. |
 | [Publishing](publishing.md) | Per-target artifacts and Modrinth publishing convention. |
 
-Agent instructions are in the root [`AGENTS.md`](../AGENTS.md). The issue ledger,
-open-work list, TODO index, and work register are local operator records and are
-excluded per checkout.
+This map covers maintained product, architecture, host-integration, and release
+references.
 
 The test host under [`testhost/`](../testhost/) is a runnable example of a mod that drives the library. Source, tests, target configuration, and release artifacts are authoritative if prose and runtime behavior differ.
