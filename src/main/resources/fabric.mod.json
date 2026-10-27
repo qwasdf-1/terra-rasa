@@ -3,14 +3,14 @@
   "id": "terrarasa",
   "version": "${version}",
   "name": "Terra Rasa",
-  "description": "Swaps freshly seeded, pre-generated canonical dimensions into a running dedicated server without reconnecting players.",
+  "description": "Prepares and swaps freshly seeded canonical dimensions on dedicated and integrated servers.",
   "authors": ["Terra Rasa Contributors"],
   "license": "Apache-2.0",
   "contact": {
     "sources": "https://github.com/qwasdf-1/terra-rasa",
     "issues": "https://github.com/qwasdf-1/terra-rasa/issues"
   },
-  "environment": "server",
+  "environment": "*",
   "entrypoints": {
     "main": ["dev.terrarasa.TerraRasaInitializer"]
   },

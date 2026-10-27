@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing GitHub Release tag, for example v0.2.0
+        description: Existing GitHub Release tag, for example v0.3.0
         required: true
         type: string
 
@@ -143,6 +143,10 @@ jobs:
           set -euo pipefail
           version_number="${VERSION}-mc${MINECRAFT}"
           version_name="Terra Rasa $VERSION (Minecraft $MINECRAFT)"
+          environment="client_and_server"
+          if [[ "$VERSION" == "0.1.0" || "$VERSION" == "0.2.0" ]]; then
+            environment="dedicated_server_only"
+          fi
           existing_response="$RUNNER_TEMP/existing-version.json"
           if ! existing_status="$(curl --silent --show-error --output "$existing_response" --write-out '%{http_code}' \
             -H 'User-Agent: qwasdf-1/terra-rasa-github-publisher' \
@@ -160,6 +164,7 @@ jobs:
               --arg version "$version_number" \
               --arg name "$version_name" \
               --arg minecraft "$MINECRAFT" \
+              --arg environment "$environment" \
               --arg fabric "$FABRIC_API_ID" \
               --rawfile changelog "$RUNNER_TEMP/changelog.md" \
               '.project_id == $project
@@ -169,7 +174,7 @@ jobs:
                 and .game_versions == [$minecraft]
                 and .loaders == ["fabric"]
                 and .version_type == "release"
-                and .environment == "dedicated_server_only"
+                and .environment == $environment
                 and .status == "listed"
                 and any(.dependencies[]; .project_id == $fabric and .dependency_type == "required")' \
               "$existing_response" >/dev/null && [[ "$existing_sha512" == "$expected_sha512" ]]; then
@@ -189,8 +194,9 @@ jobs:
             --arg version "$version_number" \
             --arg project "$PROJECT_ID" \
             --arg minecraft "$MINECRAFT" \
+            --arg environment "$environment" \
             --arg fabric "$FABRIC_API_ID" \
-            '{name:$name, version_number:$version, changelog:$changelog, dependencies:[{project_id:$fabric,dependency_type:"required"}], game_versions:[$minecraft], version_type:"release", loaders:["fabric"], environment:"dedicated_server_only", featured:false, status:"listed", project_id:$project, file_parts:["modfile"], primary_file:"modfile"}' \
+            '{name:$name, version_number:$version, changelog:$changelog, dependencies:[{project_id:$fabric,dependency_type:"required"}], game_versions:[$minecraft], version_type:"release", loaders:["fabric"], environment:$environment, featured:false, status:"listed", project_id:$project, file_parts:["modfile"], primary_file:"modfile"}' \
             > "$RUNNER_TEMP/modrinth-version.json"
           response_file="$RUNNER_TEMP/modrinth-response.json"
           if ! http_status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \

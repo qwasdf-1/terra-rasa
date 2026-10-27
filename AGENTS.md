@@ -1,9 +1,10 @@
 # Terra Rasa Agent Guide
 
 Terra Rasa is a server-side Fabric library for preparing seeded worlds and
-replacing loaded levels behind vanilla's canonical dimension keys. It is
-consumed by host mods such as Soul Link. The host owns gameplay, player
-movement, run state, and the decision to reset session state.
+replacing loaded levels behind vanilla's canonical dimension keys on dedicated
+and integrated servers. It is consumed by host mods such as Soul Link. The host
+owns gameplay, player movement, run state, and the decision to reset session
+state.
 
 ## Read first
 

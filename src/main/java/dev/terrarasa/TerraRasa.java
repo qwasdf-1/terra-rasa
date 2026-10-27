@@ -4,8 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Terra Rasa: replaces the canonical run dimensions of a running dedicated server with freshly
- * seeded, pre-generated ones, without restarting the server or reconnecting players.
+ * Terra Rasa: replaces the canonical run dimensions of a running dedicated or integrated server
+ * with freshly seeded, pre-generated ones, without restarting the server or reconnecting players.
  *
  * <p>The library knows nothing about the game played in those worlds. A host mod drives it:
  * {@link WorldPreparationService} prepares the next worlds in the background,

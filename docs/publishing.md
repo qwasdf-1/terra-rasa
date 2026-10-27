@@ -1,6 +1,6 @@
 # Publishing
 
-A version tag builds one jar for every supported Minecraft target and attaches all of them, plus a combined `SHA256SUMS`, to one GitHub Release. The Modrinth workflow publishes one version per attached jar. It uses the matching Minecraft version and a unique version number such as `0.2.0-mc1.21.11` or `0.2.0-mc26.3`.
+A version tag builds one jar for every supported Minecraft target and attaches all of them, plus a combined `SHA256SUMS`, to one GitHub Release. The Modrinth workflow publishes one version per attached jar. It uses the matching Minecraft version and a unique version number such as `0.3.0-mc1.21.11` or `0.3.0-mc26.3`.
 
 The Modrinth workflow does not edit the project page description, gallery, categories, or other project settings.
 
@@ -13,9 +13,11 @@ The Modrinth workflow does not edit the project page description, gallery, categ
 
 The publisher looks up the configured ID and confirms that the project's source link points to this repository. It also resolves Fabric API's project ID from Modrinth's public API for each version's required dependency.
 
-## Future releases
+## Versioning and compatibility
 
-Push a version tag matching `mod_version`, such as `v0.2.0`. The release workflow builds and tests every target in [`gradle/minecraft-targets.json`](../gradle/minecraft-targets.json), creates one GitHub Release with every runtime jar, and dispatches the Modrinth publisher. Each Modrinth version is tied to exactly one Minecraft target and contains that jar, the shared release notes, Fabric Loader, and the matching Fabric API dependency.
+The existing `v0.1.0` and `v0.2.0` versions remain dedicated-server-only. Starting with `v0.3.0`, new Terra Rasa versions are published as client-and-server compatible. Bump `mod_version` before tagging; the tag must match the value in `gradle.properties`.
+
+The release workflow builds and tests every target in [`gradle/minecraft-targets.json`](../gradle/minecraft-targets.json), creates one GitHub Release with every runtime jar, and dispatches the Modrinth publisher. Each Modrinth version is tied to exactly one Minecraft target and contains that jar, the shared release notes, Fabric Loader, the matching Fabric API dependency, and the client-and-server environment declaration.
 
 To publish an existing GitHub Release again, run **Publish to Modrinth** manually with its tag. The publisher derives the targets from the release's attached jars and verifies their checksums.
 

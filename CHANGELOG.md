@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.3.0
+
+### Added
+
+- Enable the shared lifecycle entrypoint on integrated-server hosts across all six supported Minecraft targets. A rendered 26.2 single-player smoke test through Soul Link passed through Terra Rasa activation.
+
+### Changed
+
+- Publish the library as client-and-server compatible so integrated-server hosts can install it in their client profile. LAN guests do not need the embedded library.
+
 ## 0.2.0
 
 ### Added
