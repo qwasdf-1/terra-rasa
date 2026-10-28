@@ -48,7 +48,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * Prepares the next run under staging identities while the current run keeps playing.
  *
- * <p>Everything advances one step per server tick from {@link #tick}; nothing here blocks on world
+ * <p>Everything advances at most one step per server tick from {@link #tick}; nothing here blocks on world
  * generation. Staged levels are registered in the server's level map only so the server ticks their chunk
  * systems; they are never canonical and never contain players. A run becomes adoptable only after every
  * staged level was saved and fully closed and its manifest was durably written as
@@ -90,6 +90,8 @@ public final class WorldPreparationService {
     /** Closed, durable runs waiting for activation, in FIFO order. */
     private final ArrayDeque<RunManifest> ready = new ArrayDeque<>();
     private int readyLimit = 1;
+    /** Minimum server ticks between staged level constructions; defaults to one. */
+    private int levelConstructionIntervalTicks = 1;
     private @Nullable String lastFailure;
 
     /**
@@ -126,6 +128,18 @@ public final class WorldPreparationService {
     /** Updates the radii captured by preparations started after this call. */
     public void setPregenerationRadii(Map<Identifier, Integer> radii) {
         this.pregenerationRadii = Map.copyOf(radii);
+    }
+
+    /**
+     * Sets the minimum number of server ticks between staged level constructions. The default is one
+     * level per tick. Call from the server thread. The setting applies immediately to an active
+     * preparation and is measured from its most recent staged-level construction.
+     */
+    public void setLevelConstructionIntervalTicks(int ticks) {
+        if (ticks < 1) {
+            throw new IllegalArgumentException("level construction interval must be at least one tick");
+        }
+        this.levelConstructionIntervalTicks = ticks;
     }
 
     /** Stops bookkeeping and flushes manifests; vanilla closes the registered levels and their tickets. */
@@ -420,7 +434,7 @@ public final class WorldPreparationService {
         }
         try {
             while (preparation.state == PreparationState.CREATING && this.active == preparation) {
-                tickCreating(server, preparation);
+                tickCreating(server, preparation, true);
             }
         } catch (RuntimeException e) {
             TerraRasa.LOGGER.error("Run preparation {} failed", preparation.runId, e);
@@ -428,15 +442,28 @@ public final class WorldPreparationService {
         }
     }
 
-    /** Builds one staged level per tick: constructing a level is a few to a few hundred milliseconds. */
+    /** Builds at most one staged level in a tick, subject to the configured interval. */
     private void tickCreating(MinecraftServer server, Preparation preparation) {
-        StagedLevel next = preparation.toConstruct.poll();
-        if (next != null) {
-            ServerLevel level = LevelFactory.createStaged(server, next.key(), next.stem(), preparation.seed);
-            ((MinecraftServerAccessor) server).terrarasa$levels().put(next.key(), level);
-            MinecraftCompat.levelLoaded(server, level);
-            preparation.levels.put(next.target(), level);
-            return;
+        tickCreating(server, preparation, false);
+    }
+
+    private void tickCreating(MinecraftServer server, Preparation preparation, boolean ignoreInterval) {
+        if (!preparation.toConstruct.isEmpty()) {
+            if (!ignoreInterval && preparation.lastLevelConstructionTick != null
+                    && server.getTickCount() - preparation.lastLevelConstructionTick
+                    < this.levelConstructionIntervalTicks) {
+                return;
+            }
+            StagedLevel next = preparation.toConstruct.poll();
+            if (next != null) {
+                ServerLevel level = LevelFactory.createStaged(server, next.key(), next.stem(), preparation.seed);
+                ((MinecraftServerAccessor) server).terrarasa$levels().put(next.key(), level);
+                MinecraftCompat.levelLoaded(server, level);
+                preparation.levels.put(next.target(), level);
+                preparation.constructionTicks.put(next.target(), server.getTickCount());
+                preparation.lastLevelConstructionTick = server.getTickCount();
+                return;
+            }
         }
         preparation.manifest.timingsMillis.put("construct", preparation.phaseElapsedMillis());
         preparation.manifest.state = PreparationState.SPAWN_FINDING;
@@ -665,6 +692,10 @@ public final class WorldPreparationService {
             active.addProperty("elapsedMillis", preparation.elapsed().toMillis());
             active.addProperty("preloadedChunks", preparation.preloadedChunks);
             active.addProperty("preloadTarget", square(preparation.preloadRadius));
+            JsonObject constructionTicks = new JsonObject();
+            preparation.constructionTicks.forEach((dimension, tick) ->
+                    constructionTicks.addProperty(dimension.toString(), tick));
+            active.add("constructedAtTicks", constructionTicks);
             if (!preparation.pregenerators.isEmpty()) {
                 int done = 0;
                 int total = 0;
@@ -787,6 +818,8 @@ public final class WorldPreparationService {
         boolean finishRequested;
         private @Nullable CompletableFuture<Void> ioFlush;
         final ArrayDeque<StagedLevel> toConstruct = new ArrayDeque<>();
+        final Map<Identifier, Integer> constructionTicks = new LinkedHashMap<>();
+        @Nullable Integer lastLevelConstructionTick;
         @Nullable SpawnSpiral spawnSearch;
         @Nullable CompletableFuture<Vec3> climateSearch;
         @Nullable CompletableFuture<Void> published;

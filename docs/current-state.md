@@ -10,6 +10,10 @@ manifest marks a run ready; an activation journal supports crash recovery.
 - Per-run seed scoping and pinned seeds for persistent/external worlds.
 - Spawn search, spawn preloading, optional offline preparation pregeneration,
   paced live pregeneration, progress persistence, and restart resumption.
+- Synchronous staged-level construction, one level per tick by default, with a
+  host-configurable tick interval to spread separate constructors during live
+  play. One individual level constructor still runs as a single server-thread
+  operation.
 - Bounded FIFO pool of up to three closed prepared runs, with deterministic
   ordering and restart adoption; the default capacity remains one.
 - Canonical activation with directory promotion, rollback, startup recovery,
