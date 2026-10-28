@@ -7,7 +7,7 @@
 | [`DimensionPolicy`](../src/main/java/dev/terrarasa/DimensionPolicy.java) | Classifies dimensions as staging, persistent service, resettable canonical, or external. The Overworld is always first in the reset order. `validate(...)` checks registered stems and conflicting policy entries. |
 | [`PinnedSeed`](../src/main/java/dev/terrarasa/PinnedSeed.java) | Keeps persistent and external dimensions on the initial world seed while the server-global seed changes for each run. Call `setPolicy(...)` before world levels open. |
 | [`SeedOverride`](../src/main/java/dev/terrarasa/SeedOverride.java) | Scopes a run seed to construction of one staged dimension, so preparation does not change the live server's global seed. It is used by the preparation service. |
-| [`WorldPreparationService`](../src/main/java/dev/terrarasa/WorldPreparationService.java) | Creates isolated staged levels, discovers vanilla's initial spawn, preloads it, optionally pregenerates areas, flushes and closes levels, and writes a durable manifest. It manages a FIFO queue of up to three prepared runs. Use `setReadyLimit`, `readyRuns`, `begin`, `tick`, `takeReady`, `finishSoon`, `loadFromDisk`, and `fail` to drive it. |
+| [`WorldPreparationService`](../src/main/java/dev/terrarasa/WorldPreparationService.java) | Creates isolated staged levels, discovers vanilla's initial spawn, preloads it, optionally pregenerates areas, flushes and closes levels, and writes a durable manifest. It manages a FIFO queue of up to three prepared runs. Use `setReadyLimit`, `setLevelConstructionIntervalTicks`, `readyRuns`, `begin`, `tick`, `takeReady`, `finishSoon`, `loadFromDisk`, and `fail` to drive it. |
 | [`CanonicalActivationService`](../src/main/java/dev/terrarasa/CanonicalActivationService.java) | Replaces the loaded levels behind canonical keys. `activate(...)` returns the run id, seed, spawn, and phase timings; failures are rolled back and surfaced as `LifecycleException`. |
 | [`LevelRetirement`](../src/main/java/dev/terrarasa/LevelRetirement.java) | Drains chunk work, saves, and closes an empty level before its storage is moved; late POI writes to a closed level are ignored. The activation service uses it for each retirement. |
 | [`SessionReset`](../src/main/java/dev/terrarasa/session/SessionReset.java) | Resets server-owned run state and a connected player's state through live objects. It does not choose when a host should reset or where players should go. |
@@ -24,7 +24,7 @@ Preparation uses `terrarasa:stage/<run-id>/<namespace>/<dimension-path>` identit
 
 The preparation stages are:
 
-1. Construct staged levels.
+1. Construct staged levels. By default, at most one level is constructed per server tick. Hosts can increase the minimum interval between separate level constructions with `setLevelConstructionIntervalTicks(...)`. This paces the synchronous constructors; it does not make one constructor asynchronous or split its server-thread cost across ticks. The optional `constructNow(...)` method intentionally bypasses the interval and batches the remaining constructors in one server-thread call. `describe()` reports the actual server tick for each staged dimension constructed during the active preparation.
 2. Run vanilla's initial-spawn search, examining loaded chunks in the vanilla spiral order.
 3. Preload the configured chunk radius around the spawn.
 4. Optionally pregenerate additional circular areas to the `spawn` chunk status.

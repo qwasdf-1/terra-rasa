@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.3.2
+
+### Added
+
+- Let hosts pace separate staged-level constructions with a configurable tick interval, keeping the default at one level per tick.
+- Report the server tick for each dimension constructed in the active preparation's diagnostics.
+
 ## 0.3.1
 
 ### Fixed

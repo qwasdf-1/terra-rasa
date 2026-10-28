@@ -72,7 +72,7 @@ For Minecraft 1.21.11, use Fabric API `0.141.6+1.21.11`, Loom `1.17.21`, and Jav
 
 1. During mod initialization, register a `DimensionPolicy` with `PinnedSeed.setPolicy(...)`, before the server opens world levels.
 2. When the server starts, create `WorldPreparationService` and `CanonicalActivationService`, then call `loadFromDisk(...)` to adopt a complete prepared run from a previous session.
-3. Start preparation with `begin(server, seed, policy)` and call `tick(server)` at the end of every server tick. A run is ready only after all staged levels are saved and closed; `ready()` exposes its manifest. `finishSoon()` lets a host favor a requested start over optional pregeneration.
+3. Start preparation with `begin(server, seed, policy)` and call `tick(server)` at the end of every server tick. Staged levels are constructed synchronously, at most one per tick by default; hosts may use `setLevelConstructionIntervalTicks(...)` to spread separate constructors farther apart. A run is ready only after all staged levels are saved and closed; `ready()` exposes its manifest. `finishSoon()` lets a host favor a requested start over optional pregeneration.
 4. Move every player out of resettable dimensions. Activate the manifest with `CanonicalActivationService.activate(...)` on the server thread.
 5. If desired, reset server and player state with `SessionReset`, then move players into the new worlds. Activation failures are rolled back and reported as `LifecycleException`.
 
