@@ -3,6 +3,7 @@ package dev.terrarasa;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -87,10 +88,24 @@ public final class CanonicalActivationService {
         }
         for (RunManifest.Dimension dimension : manifest.dimensions) {
             Identifier target = Identifier.parse(dimension.target);
-            journal.moves.add(new ActivationJournal.Move(dimension.target,
-                    this.paths.relativize(this.paths.dimension(target)),
+            Path canonical = this.paths.dimension(target);
+            Path stage = this.paths.dimension(Identifier.parse(dimension.stage));
+            ActivationJournal.Move move = new ActivationJournal.Move(dimension.target,
+                    this.paths.relativize(canonical),
                     this.paths.relativize(this.paths.quarantine(journal.previousRunLabel, target)),
-                    this.paths.relativize(this.paths.dimension(Identifier.parse(dimension.stage)))));
+                    this.paths.relativize(stage));
+            for (String partName : MinecraftCompat.rootDimensionStorageParts(target)) {
+                Path canonicalPart = canonical.resolve(partName);
+                Path stagePart = stage.resolve(partName);
+                boolean hadCanonical = Files.exists(canonicalPart, LinkOption.NOFOLLOW_LINKS);
+                boolean hadStage = Files.exists(stagePart, LinkOption.NOFOLLOW_LINKS);
+                if (hadCanonical && !Files.isDirectory(canonicalPart, LinkOption.NOFOLLOW_LINKS)
+                        || hadStage && !Files.isDirectory(stagePart, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new LifecycleException("Legacy Overworld storage part is not a directory: " + partName);
+                }
+                move.rootParts.add(new ActivationJournal.RootStoragePart(partName, hadCanonical, hadStage));
+            }
+            journal.moves.add(move);
         }
 
         Attempt attempt = new Attempt(journal, order);
@@ -391,7 +406,7 @@ public final class CanonicalActivationService {
 
     /** Old data is only deleted after commit, asynchronously, once no reader or writer remains. */
     private void cleanupAfterCommit(UUID runId, ActivationJournal journal) {
-        Path quarantine = this.paths.quarantineRoot().resolve(journal.previousRunLabel);
+        Path quarantine = this.paths.quarantineRun(journal.previousRunLabel);
         Path stageRoot = this.paths.stageDimensionsRoot(runId);
         Path manifestDir = this.paths.manifest(runId).getParent();
         Util.ioPool().execute(() -> {

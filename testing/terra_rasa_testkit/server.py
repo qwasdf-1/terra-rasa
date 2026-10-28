@@ -105,6 +105,8 @@ class ServerProcess:
             "max-players": 8,
             "difficulty": "normal",
             "sync-chunk-writes": "false",
+            # Keep headless integration servers responsive to RCON after their last bot disconnects.
+            "pause-when-empty-seconds": -1,
         }
         (self.directory / "server.properties").write_text(
             "".join(f"{key}={value}\n" for key, value in properties.items()), encoding="utf-8")

@@ -13,8 +13,8 @@
 | [`SessionReset`](../src/main/java/dev/terrarasa/session/SessionReset.java) | Resets server-owned run state and a connected player's state through live objects. It does not choose when a host should reset or where players should go. |
 | [`CanonicalLevelEvents`](../src/main/java/dev/terrarasa/CanonicalLevelEvents.java) | Veto and replacement notifications for mods that retain level object references. |
 | [`StageKeys`](../src/main/java/dev/terrarasa/StageKeys.java) | Creates collision-free staging identities and reads the owning run id from one. Staging identities are temporary and must not be used as player-facing dimension ids. |
-| [`WorldPaths`](../src/main/java/dev/terrarasa/WorldPaths.java) | Resolves Terra Rasa metadata and vanilla dimension directories under the server's world root. |
-| [`AtomicFiles`](../src/main/java/dev/terrarasa/AtomicFiles.java) | Writes files through synced temporary files and atomic renames; moves directories atomically and refuses to copy if atomic promotion is unavailable. |
+| [`WorldPaths`](../src/main/java/dev/terrarasa/WorldPaths.java) | Resolves Terra Rasa metadata and vanilla dimension directories under the server's world root; rejects relative paths that escape that root. |
+| [`AtomicFiles`](../src/main/java/dev/terrarasa/AtomicFiles.java) | Writes files completely through synced temporary files and atomic renames; moves directories atomically and refuses to copy if atomic promotion is unavailable. |
 
 `RunManifest` describes a prepared run and its dimensions, seed, spawn, progress, and timings. `RegistryFingerprint` ensures a prepared run is only reused with the same Minecraft version, selected data packs, structure setting, and resettable level definitions. `StartupRecovery` runs automatically before vanilla opens levels and reconciles an interrupted activation from its `ActivationJournal`. Live pregeneration is also owned and ticked automatically by the library; hosts configure its per-dimension radii when constructing `WorldPreparationService` or with `setPregenerationRadii(...)` for preparations begun afterward.
 
@@ -40,7 +40,9 @@ If the server stops during preparation, Terra Rasa flushes its manifest writes a
 
 Activation runs on the server thread between ticks. It verifies preconditions, drains and closes the old levels, records each directory move in `active-journal.json`, moves old data into quarantine, promotes staged directories, rebinds the global seed, and constructs ordinary vanilla `ServerLevel` instances under the canonical keys. It validates that each key resolves to the replacement and that the prepared spawn chunk loads before marking the journal committed.
 
-Ordinary failures roll back to the prior levels and seed. If the process stops mid-swap, Terra Rasa reads the journal before vanilla opens dimension storage and completes either rollback or commit according to the last durable phase. On success, the old world data and stage metadata are deleted asynchronously after commit. The server's filesystem must support atomic directory renames within the world root; activation checks this before making changes.
+Minecraft 1.21.11 stores the Overworld at the world root, alongside global files such as `level.dat` and player data. For that legacy layout, activation journals and swaps only the Overworld storage folders `region`, `entities`, `poi`, and `data`; root metadata and player files stay in place. Newer versions use a separate dimension directory and continue to swap the complete directory. This keeps the 1.21.11 world root in place while still giving each run fresh dimension-owned storage.
+
+Ordinary failures roll back to the prior levels and seed. If the process stops mid-swap, Terra Rasa reads and validates every journaled path and run label before vanilla opens dimension storage, then completes either rollback or commit according to the last durable phase. Legacy root-folder swaps recover each of the four storage folders from that same journal. Malformed or path-escaping journal data stops startup before recovery touches files. On success, the old world data and stage metadata are deleted asynchronously after commit. The server's filesystem must support atomic directory renames within the world root; activation checks this before making changes.
 
 ## `SessionReset`
 

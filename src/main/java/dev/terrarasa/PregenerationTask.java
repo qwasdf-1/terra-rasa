@@ -45,7 +45,38 @@ public final class PregenerationTask {
     }
 
     int total() {
-        return Pregenerator.order(this.radiusChunks).length / 2;
+        return totalForRadius(this.radiusChunks);
+    }
+
+    /** Checks persisted progress before it is allowed to allocate chunk-order arrays or touch a level. */
+    void validate() {
+        if (this.dimension == null) {
+            throw new IllegalArgumentException("pregeneration dimension is missing");
+        }
+        Identifier id = Identifier.parse(this.dimension);
+        if (!id.toString().equals(this.dimension) || StageKeys.isStage(id)) {
+            throw new IllegalArgumentException("invalid pregeneration dimension " + this.dimension);
+        }
+        if (this.centerChunkX < -1_875_000 || this.centerChunkX > 1_875_000
+                || this.centerChunkZ < -1_875_000 || this.centerChunkZ > 1_875_000) {
+            throw new IllegalArgumentException("pregeneration center is outside the world border");
+        }
+        if (this.radiusChunks < 1 || this.radiusChunks > 256) {
+            throw new IllegalArgumentException("pregeneration radius must be between 1 and 256 chunks");
+        }
+        if (this.next < 0 || this.next > total()) {
+            throw new IllegalArgumentException("pregeneration progress is outside its area");
+        }
+    }
+
+    static int totalForRadius(int radius) {
+        int total = 0;
+        long radiusSquared = (long) radius * radius;
+        for (int x = -radius; x <= radius; x++) {
+            int zRadius = (int) Math.floor(Math.sqrt(radiusSquared - (long) x * x));
+            total += 2 * zRadius + 1;
+        }
+        return total;
     }
 
     boolean isComplete() {

@@ -3,6 +3,7 @@ package dev.terrarasa.testhost;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,8 @@ public final class TestHost implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 HostCommands.register(dispatcher));
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            host = new Host(server, policy, config.preloadRadius, config.pregenerationRadii());
+            host = new Host(server, policy, config.preloadRadius, config.pregenerationRadii(),
+                    Duration.ofSeconds(config.preparationTimeoutSeconds));
             host.started();
         });
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> host = null);
@@ -67,6 +69,7 @@ public final class TestHost implements ModInitializer {
     /** {@code config/terrarasa-testhost.json}, written by the test harness. */
     static final class Config {
         int preloadRadius = 2;
+        int preparationTimeoutSeconds = 600;
         /** Blocks to pregenerate per dimension; none by default. */
         Map<String, Integer> pregeneration = Map.of();
         List<String> resettableDimensions = List.of("minecraft:overworld", "minecraft:the_nether", "minecraft:the_end");

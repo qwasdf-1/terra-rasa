@@ -5,6 +5,7 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
@@ -22,7 +23,10 @@ public final class AtomicFiles {
         Path temporary = target.resolveSibling(target.getFileName() + ".tmp");
         try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
-            channel.write(java.nio.ByteBuffer.wrap(content.getBytes(StandardCharsets.UTF_8)));
+            java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(content.getBytes(StandardCharsets.UTF_8));
+            while (buffer.hasRemaining()) {
+                channel.write(buffer);
+            }
             channel.force(true);
         }
         Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
@@ -34,7 +38,10 @@ public final class AtomicFiles {
      * both a partial source and a partial target after a crash, which the journal cannot disambiguate.
      */
     public static void moveDirectory(Path source, Path target) throws IOException {
-        if (Files.exists(target)) {
+        if (!Files.isDirectory(source, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("Source is not a real directory " + source);
+        }
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("Refusing to overwrite existing directory " + target);
         }
         Files.createDirectories(target.getParent());

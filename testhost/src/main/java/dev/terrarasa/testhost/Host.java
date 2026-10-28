@@ -35,7 +35,6 @@ import org.jspecify.annotations.Nullable;
 
 /** One running server's use of the library, the way a game mod would wire it. */
 final class Host {
-    private static final Duration TIMEOUT = Duration.ofMinutes(10);
     private static final Duration DRAIN_TIMEOUT = Duration.ofSeconds(30);
     private static final Vec3 HOLDING_SPOT = new Vec3(0.5, 65.0, 0.5);
 
@@ -51,12 +50,14 @@ final class Host {
     private int attempts;
     private JsonObject lastActivation = new JsonObject();
 
-    Host(MinecraftServer server, DimensionPolicy policy, int preloadRadius, Map<Identifier, Integer> pregenerationRadii) {
+    Host(MinecraftServer server, DimensionPolicy policy, int preloadRadius, Map<Identifier, Integer> pregenerationRadii,
+            Duration preparationTimeout) {
         this.server = server;
         this.policy = policy;
         this.preloadRadius = preloadRadius;
         this.paths = new WorldPaths(server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize());
-        this.preparation = new WorldPreparationService(this.paths, preloadRadius, pregenerationRadii, TIMEOUT, DRAIN_TIMEOUT,
+        this.preparation = new WorldPreparationService(this.paths, preloadRadius, pregenerationRadii,
+                preparationTimeout, DRAIN_TIMEOUT,
                 this::hold);
         this.activation = new CanonicalActivationService(this.paths, DRAIN_TIMEOUT);
     }
