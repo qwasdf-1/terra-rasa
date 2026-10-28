@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.3.1
+
+### Fixed
+
+- Activate fresh Overworld data correctly on Minecraft 1.21.11 by swapping its region, entity, POI, and saved-data directories individually while preserving global files at the world root.
+- Recover interrupted legacy storage swaps safely, and reject malformed activation journals and run manifests before they can direct filesystem changes.
+- Bound and report preparation finalization failures, including timeouts while worlds are flushing to disk.
+
 ## 0.3.0
 
 ### Added

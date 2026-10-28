@@ -32,7 +32,7 @@ Terra Rasa provides a separate build for each supported Minecraft version:
 | 26.2 | 25 | 1.18.4 | 0.161.0+26.2 |
 | 26.3 | 25 | 1.18.4 | 0.165.0+26.3 |
 
-Each build uses Fabric Loader 0.19.5. The full target list is maintained in [`gradle/minecraft-targets.json`](gradle/minecraft-targets.json), and CI builds every target. Terra Rasa 0.3.0 supports dedicated servers and integrated single-player/LAN hosts across the listed targets. A rendered 26.2 single-player smoke test through Soul Link passed; vanilla LAN guest login remains unverified. The host needs Terra Rasa installed in the client profile for integrated play; remote LAN guests can remain vanilla.
+Each build uses Fabric Loader 0.19.5. The full target list is maintained in [`gradle/minecraft-targets.json`](gradle/minecraft-targets.json), and CI builds every target. Terra Rasa 0.3.0 introduced support for dedicated servers and integrated single-player/LAN hosts across the listed targets. Version 0.3.1 fixes legacy Overworld activation on Minecraft 1.21.11. A rendered 26.2 single-player smoke test through Soul Link passed; vanilla LAN guest login remains unverified. The host needs Terra Rasa installed in the client profile for integrated play; remote LAN guests can remain vanilla.
 
 ## Add it to a host mod
 

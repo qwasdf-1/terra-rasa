@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing GitHub Release tag, for example v0.3.0
+        description: Existing GitHub Release tag, for example v0.3.1
         required: true
         type: string
 
@@ -143,10 +143,11 @@ jobs:
           set -euo pipefail
           version_number="${VERSION}-mc${MINECRAFT}"
           version_name="Terra Rasa $VERSION (Minecraft $MINECRAFT)"
-          environment="client_and_server"
-          if [[ "$VERSION" == "0.1.0" || "$VERSION" == "0.2.0" ]]; then
-            environment="dedicated_server_only"
-          fi
+          environment="server_only"
+          case "$VERSION" in
+            0.1.0|0.2.0) environment="dedicated_server_only" ;;
+            0.3.0) environment="client_and_server" ;;
+          esac
           existing_response="$RUNNER_TEMP/existing-version.json"
           if ! existing_status="$(curl --silent --show-error --output "$existing_response" --write-out '%{http_code}' \
             -H 'User-Agent: qwasdf-1/terra-rasa-github-publisher' \
