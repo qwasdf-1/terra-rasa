@@ -22,7 +22,9 @@ manifest marks a run ready; an activation journal supports crash recovery.
 
 Terra Rasa does not own gameplay rules, command UX, player destinations, or a
 host's choice to reset session state. Those belong to the consuming mod. Version
-0.3.0 supports dedicated and integrated servers. For single-player or LAN, the
+0.3.0 and later support dedicated and integrated servers. Version 0.3.1 fixes
+activation of legacy root-level Overworld storage on Minecraft 1.21.11. For
+single-player or LAN, the
 host must have the mod installed in the client profile. Remote LAN guests do not
 need Terra Rasa when it is embedded in a host mod. A rendered 26.2 integrated
 single-player smoke test through Soul Link passed through Terra Rasa activation.
