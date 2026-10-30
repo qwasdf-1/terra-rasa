@@ -19,6 +19,7 @@ jobs:
         run: echo "matrix=$(jq -c . gradle/minecraft-targets.json)" >> "$GITHUB_OUTPUT"
 
   build:
+    name: build (${{ matrix.minecraft_version }})
     needs: targets
     runs-on: ubuntu-latest
     strategy:

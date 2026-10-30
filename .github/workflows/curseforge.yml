@@ -108,6 +108,7 @@ jobs:
           echo "fabric_api_slug=fabric-api" >> "$GITHUB_OUTPUT"
 
   publish:
+    name: publish (${{ matrix.minecraft_version }})
     needs: [release, project]
     runs-on: ubuntu-latest
     strategy:
