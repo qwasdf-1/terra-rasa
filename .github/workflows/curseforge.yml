@@ -145,34 +145,6 @@ jobs:
         run: |
           set -euo pipefail
           display_name="Terra Rasa $VERSION (Minecraft $MINECRAFT)"
-          existing_response="$RUNNER_TEMP/existing-files.json"
-
-          if ! existing_status="$(curl --silent --show-error --output "$existing_response" --write-out '%{http_code}' \
-            -H "X-Api-Token: $CURSEFORGE_TOKEN" \
-            "https://minecraft.curseforge.com/api/projects/${PROJECT_ID}/files")"; then
-            echo "Could not check whether CurseForge file for $JAR_NAME already exists." >&2
-            test ! -s "$existing_response" || cat "$existing_response" >&2
-            exit 1
-          fi
-
-          if [[ "$existing_status" == "200" ]]; then
-            existing_file="$(jq -c --arg jar "$JAR_NAME" '.[]? | select(.fileName == $jar)' "$existing_response" | head -n 1)"
-            if [[ -n "$existing_file" ]]; then
-              existing_id="$(jq -r '.id' <<< "$existing_file")"
-              existing_length="$(jq -r '.fileLength // empty' <<< "$existing_file")"
-              expected_length="$(stat -c %s "dist/$JAR_NAME")"
-              if [[ -n "$existing_length" && "$existing_length" -ne "$expected_length" ]]; then
-                echo "CurseForge file $JAR_NAME exists (ID: $existing_id) but its length ($existing_length) differs from this release asset ($expected_length)." >&2
-                exit 1
-              fi
-              echo "CurseForge file $JAR_NAME already exists (ID: $existing_id) with matching file length; skipping upload."
-              exit 0
-            fi
-          elif [[ "$existing_status" != "404" ]]; then
-            echo "Could not check existing CurseForge files on project $PROJECT_ID (HTTP $existing_status):" >&2
-            cat "$existing_response" >&2
-            exit 1
-          fi
 
           target_game_versions="$(jq -c --arg mc "$MINECRAFT" '.[$mc]' <<< "$GAME_VERSIONS")"
           test -n "$target_game_versions" && test "$target_game_versions" != "null" || {
@@ -199,6 +171,10 @@ jobs:
           fi
 
           if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+            if grep -iq -E "duplicate|already exists" "$response_file" 2>/dev/null; then
+              echo "CurseForge file $JAR_NAME is already uploaded for project $PROJECT_ID; skipping upload."
+              exit 0
+            fi
             echo "CurseForge file upload failed with HTTP $http_status:" >&2
             if ! jq -e . "$response_file" >/dev/null 2>&1; then
               cat "$response_file" >&2
