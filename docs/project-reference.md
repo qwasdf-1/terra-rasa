@@ -37,7 +37,7 @@ legacy source overlay; the 26.x targets use the modern overlay.
 | Host lifecycle and API usage | `host-integration.md` |
 | Utility contracts, persistence, compatibility | `reference.md` |
 | Test-host example | `testhost/` |
-| Per-target release and Modrinth behavior | `publishing.md` |
+| Per-target release, Modrinth, and CurseForge behavior | `publishing.md` |
 
 The source and integration tests define actual behavior. A host must use the
 library artifact matching its exact Minecraft target.

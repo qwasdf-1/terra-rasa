@@ -92,7 +92,7 @@ The integration suite exercises world swaps, recovery, player continuity, seed h
 - [Documentation map](docs/README.md)
 - [Host integration](docs/host-integration.md)
 - [Library reference](docs/reference.md)
-- [Publishing to Modrinth](docs/publishing.md)
+- [Publishing](docs/publishing.md)
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
 

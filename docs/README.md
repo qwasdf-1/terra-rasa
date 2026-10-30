@@ -10,7 +10,7 @@
 | [Host integration](host-integration.md) | Dimension policy, service lifecycle, activation, state reset, and extension events. |
 | [Library reference](reference.md) | Utility-by-utility behavior, pregeneration, recovery, compatibility, and world files. |
 | [Reference index](reference/README.md) | Navigation for maintained library references. |
-| [Publishing](publishing.md) | Per-target artifacts and Modrinth publishing convention. |
+| [Publishing](publishing.md) | Per-target artifacts, Modrinth, and CurseForge publishing conventions. |
 
 This map covers maintained product, architecture, host-integration, and release
 references.

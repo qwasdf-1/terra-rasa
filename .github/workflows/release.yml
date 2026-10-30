@@ -114,3 +114,13 @@ jobs:
           --repo "$GH_REPO"
           --ref main
           --field tag="$GITHUB_REF_NAME"
+
+      - name: Dispatch CurseForge publishing workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: >-
+          gh workflow run curseforge.yml
+          --repo "$GH_REPO"
+          --ref main
+          --field tag="$GITHUB_REF_NAME"

@@ -1,0 +1,210 @@
+name: Publish to CurseForge
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub Release tag, for example v0.3.2
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || vars.CURSEFORGE_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      matrix: ${{ steps.release.outputs.matrix }}
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Read release target jars
+        id: release
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}" >/dev/null
+          version="$(git show "$RELEASE_TAG:gradle.properties" | sed -n 's/^mod_version=//p')"
+          test -n "$version"
+          test "$RELEASE_TAG" = "v$version" || {
+            echo "Release tag $RELEASE_TAG does not match mod_version $version" >&2
+            exit 1
+          }
+          release_json="$(gh release view "$RELEASE_TAG" --json assets)"
+          targets="$(jq -c --arg version "$version" '
+            [.assets[].name
+              | select(startswith("terra-rasa-mc") and endswith("-" + $version + ".jar"))
+              | (ltrimstr("terra-rasa-mc") | rtrimstr("-" + $version + ".jar")) as $minecraft
+              | select($minecraft | test("^[0-9]+(\\.[0-9]+)+$"))
+              | {minecraft_version:$minecraft, jar_name:("terra-rasa-mc" + $minecraft + "-" + $version + ".jar")}]
+            | unique_by(.minecraft_version)
+          ' <<< "$release_json")"
+          test "$(jq 'length' <<< "$targets")" -gt 0 || {
+            echo "No Terra Rasa runtime jars for version $version are attached to $RELEASE_TAG" >&2
+            exit 1
+          }
+
+          if git cat-file -e "$RELEASE_TAG:gradle/minecraft-targets.json" 2>/dev/null; then
+            expected="$(git show "$RELEASE_TAG:gradle/minecraft-targets.json" | jq -c '[.include[].minecraft_version] | unique | sort')"
+            actual="$(jq -c '[.[].minecraft_version] | unique | sort' <<< "$targets")"
+            test "$actual" = "$expected" || {
+              echo "Release jars do not match the tagged Minecraft target matrix" >&2
+              echo "Expected: $expected" >&2
+              echo "Found:    $actual" >&2
+              exit 1
+            }
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          matrix="$(jq -cn --argjson include "$targets" '{include:$include}')"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  project:
+    if: github.event_name == 'workflow_dispatch' || vars.CURSEFORGE_PROJECT_ID != ''
+    needs: release
+    runs-on: ubuntu-latest
+    outputs:
+      project_id: ${{ steps.project.outputs.project_id }}
+      game_versions: ${{ steps.project.outputs.game_versions }}
+      fabric_api_slug: ${{ steps.dependencies.outputs.fabric_api_slug }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Resolve CurseForge project and game versions
+        id: project
+        env:
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          CURSEFORGE_GAME_VERSIONS: ${{ vars.CURSEFORGE_GAME_VERSIONS }}
+          TARGETS_JSON: ${{ needs.release.outputs.matrix }}
+          CURSEFORGE_USER_AGENT: qwasdf-1/terra-rasa-github-publisher
+        run: |
+          set -euo pipefail
+          result="$(python3 .github/scripts/resolve_curseforge_project.py)"
+          project_id="$(jq -er '.project_id' <<< "$result")"
+          game_versions="$(jq -c '.game_versions' <<< "$result")"
+          echo "project_id=$project_id" >> "$GITHUB_OUTPUT"
+          echo "game_versions=$game_versions" >> "$GITHUB_OUTPUT"
+          echo "Resolved CurseForge project: $project_id." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Resolve CurseForge dependencies
+        id: dependencies
+        run: |
+          echo "fabric_api_slug=fabric-api" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: [release, project]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.release.outputs.matrix) }}
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+      PROJECT_ID: ${{ needs.project.outputs.project_id }}
+      GAME_VERSIONS: ${{ needs.project.outputs.game_versions }}
+      FABRIC_API_SLUG: ${{ needs.project.outputs.fabric_api_slug }}
+      VERSION: ${{ needs.release.outputs.version }}
+      MINECRAFT: ${{ matrix.minecraft_version }}
+      JAR_NAME: ${{ matrix.jar_name }}
+    steps:
+      - name: Download and verify release jar
+        run: |
+          set -euo pipefail
+          test -n "$CURSEFORGE_TOKEN" || { echo "Set the CURSEFORGE_TOKEN Actions secret" >&2; exit 1; }
+          mkdir -p dist
+          gh release download "$RELEASE_TAG" --pattern "$JAR_NAME" --pattern SHA256SUMS --dir dist
+          expected="$(awk -v name="$JAR_NAME" '$2 == name { print $1 }' dist/SHA256SUMS)"
+          actual="$(sha256sum "dist/$JAR_NAME" | cut -d ' ' -f 1)"
+          test -n "$expected" && test "$actual" = "$expected" || {
+            echo "SHA-256 verification failed for $JAR_NAME" >&2
+            exit 1
+          }
+          gh release view "$RELEASE_TAG" --json body --jq .body > "$RUNNER_TEMP/changelog.md"
+          test -s "$RUNNER_TEMP/changelog.md"
+
+      - name: Publish Minecraft ${{ matrix.minecraft_version }} jar to CurseForge
+        run: |
+          set -euo pipefail
+          display_name="Terra Rasa $VERSION (Minecraft $MINECRAFT)"
+          existing_response="$RUNNER_TEMP/existing-files.json"
+
+          if ! existing_status="$(curl --silent --show-error --output "$existing_response" --write-out '%{http_code}' \
+            -H "X-Api-Token: $CURSEFORGE_TOKEN" \
+            "https://minecraft.curseforge.com/api/projects/${PROJECT_ID}/files")"; then
+            echo "Could not check whether CurseForge file for $JAR_NAME already exists." >&2
+            test ! -s "$existing_response" || cat "$existing_response" >&2
+            exit 1
+          fi
+
+          if [[ "$existing_status" == "200" ]]; then
+            existing_file="$(jq -c --arg jar "$JAR_NAME" '.[]? | select(.fileName == $jar)' "$existing_response" | head -n 1)"
+            if [[ -n "$existing_file" ]]; then
+              existing_id="$(jq -r '.id' <<< "$existing_file")"
+              existing_length="$(jq -r '.fileLength // empty' <<< "$existing_file")"
+              expected_length="$(stat -c %s "dist/$JAR_NAME")"
+              if [[ -n "$existing_length" && "$existing_length" -ne "$expected_length" ]]; then
+                echo "CurseForge file $JAR_NAME exists (ID: $existing_id) but its length ($existing_length) differs from this release asset ($expected_length)." >&2
+                exit 1
+              fi
+              echo "CurseForge file $JAR_NAME already exists (ID: $existing_id) with matching file length; skipping upload."
+              exit 0
+            fi
+          elif [[ "$existing_status" != "404" ]]; then
+            echo "Could not check existing CurseForge files on project $PROJECT_ID (HTTP $existing_status):" >&2
+            cat "$existing_response" >&2
+            exit 1
+          fi
+
+          target_game_versions="$(jq -c --arg mc "$MINECRAFT" '.[$mc]' <<< "$GAME_VERSIONS")"
+          test -n "$target_game_versions" && test "$target_game_versions" != "null" || {
+            echo "No CurseForge game version IDs resolved for Minecraft $MINECRAFT" >&2
+            exit 1
+          }
+
+          jq -n --rawfile changelog "$RUNNER_TEMP/changelog.md" \
+            --arg name "$display_name" \
+            --arg fabric "$FABRIC_API_SLUG" \
+            --argjson game_versions "$target_game_versions" \
+            '{displayName:$name, changelog:$changelog, changelogType:"markdown", releaseType:"release", gameVersions:$game_versions, relations:{projects:[{slug:$fabric,type:"requiredDependency"}]}}' \
+            > "$RUNNER_TEMP/curseforge-metadata.json"
+
+          response_file="$RUNNER_TEMP/curseforge-response.json"
+          if ! http_status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
+            -H "X-Api-Token: $CURSEFORGE_TOKEN" \
+            -F "metadata=<$RUNNER_TEMP/curseforge-metadata.json" \
+            -F "file=@dist/$JAR_NAME" \
+            "https://minecraft.curseforge.com/api/projects/${PROJECT_ID}/upload-file")"; then
+            echo "Could not connect to the CurseForge upload endpoint." >&2
+            test ! -s "$response_file" || cat "$response_file" >&2
+            exit 1
+          fi
+
+          if [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+            echo "CurseForge file upload failed with HTTP $http_status:" >&2
+            if ! jq -e . "$response_file" >/dev/null 2>&1; then
+              cat "$response_file" >&2
+            else
+              jq -r 'if type == "object" then [(.errorMessage // .error // empty), (.description // empty)] | map(select(length > 0)) | join(": ") else tostring end' "$response_file" >&2
+            fi
+            exit 1
+          fi
+
+          jq -er 'select(.id) | "Published CurseForge file \(.id) for Minecraft '$MINECRAFT'"' "$response_file"

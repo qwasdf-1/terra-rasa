@@ -8,4 +8,4 @@
 - [Host integration](../host-integration.md) — how a host drives the library.
 - [Library reference](../reference.md) — API utilities, recovery, compatibility,
   and world files.
-- [Publishing](../publishing.md) — per-target releases and Modrinth versions.
+- [Publishing](../publishing.md) — per-target releases, Modrinth, and CurseForge publication.
