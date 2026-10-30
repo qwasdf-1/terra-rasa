@@ -60,7 +60,7 @@ def fetch_api(path: str, token: str, user_agent: str) -> list | dict:
         except Exception:
             pass
         if exc.code in (401, 403):
-            fail(f"CurseForge token is invalid or unauthorized (HTTP {exc.code}): {body or exc.reason}")
+            fail(f"CurseForge token is invalid or unauthorized at {url} (HTTP {exc.code}): {body or exc.reason}")
         if exc.code == 404:
             fail(f"CurseForge resource not found at {url} (HTTP 404): {body or exc.reason}")
         fail(f"CurseForge API request failed for {url} (HTTP {exc.code}): {body or exc.reason}")
@@ -172,9 +172,6 @@ def main() -> None:
         except Exception as exc:
             fail(f"Invalid CURSEFORGE_GAME_VERSIONS override: {exc}")
 
-    # Verify project access
-    fetch_api(f"projects/{project_id}/files", token=curseforge_token, user_agent=user_agent)
-
     # Check if all targets are covered by manual overrides
     all_overridden = all(t.get("minecraft_version") in overrides for t in targets)
 
@@ -185,9 +182,16 @@ def main() -> None:
             game_versions_map[mc] = overrides[mc]
     else:
         versions_raw = fetch_api("game/versions", token=curseforge_token, user_agent=user_agent)
-        types_raw = fetch_api("game/version-types", token=curseforge_token, user_agent=user_agent)
-        if not isinstance(versions_raw, list) or not isinstance(types_raw, list):
+        if not isinstance(versions_raw, list):
             fail("Unexpected response format from CurseForge game versions API")
+
+        types_raw: list[dict] = []
+        try:
+            res = fetch_api("game/version-types", token=curseforge_token, user_agent=user_agent)
+            if isinstance(res, list):
+                types_raw = res
+        except Exception:
+            types_raw = []
 
         for t in targets:
             mc = t.get("minecraft_version")

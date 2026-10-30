@@ -82,8 +82,6 @@ class ResolveCurseForgeProjectTest(unittest.TestCase):
     @patch("resolve_curseforge_project.fetch_api")
     def test_main_with_api_fetch(self, mock_fetch: MagicMock) -> None:
         def fetch_side_effect(path: str, **kwargs):
-            if path == "projects/12345/files":
-                return [{"id": 999, "fileName": "existing.jar"}]
             if path == "game/versions":
                 return self.mock_versions
             if path == "game/version-types":
@@ -141,6 +139,7 @@ class ResolveCurseForgeProjectTest(unittest.TestCase):
                 data = json.loads(output)
                 self.assertEqual(data["project_id"], "9876")
                 self.assertEqual(data["game_versions"]["1.21.11"], [555, 666])
+                mock_fetch.assert_not_called()
 
 
 if __name__ == "__main__":
