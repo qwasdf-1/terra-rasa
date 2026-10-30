@@ -68,11 +68,34 @@ def fetch_api(path: str, token: str, user_agent: str) -> list | dict:
         fail(f"Could not connect to CurseForge API at {url}: {exc}")
 
 
+KNOWN_ENV_IDS: dict[str, int] = {
+    "client": 9638,
+    "server": 9639,
+}
+
+
+def parse_environments(raw: str | None) -> list[str]:
+    if not raw:
+        return ["client", "server"]
+    tokens = [t.strip().lower() for t in raw.replace(",", " ").replace("|", " ").split() if t.strip()]
+    envs: list[str] = []
+    for t in tokens:
+        if t in ("both", "client_and_server", "*"):
+            for e in ("client", "server"):
+                if e not in envs:
+                    envs.append(e)
+        elif t in ("client", "server"):
+            if t not in envs:
+                envs.append(t)
+    return envs or ["client", "server"]
+
+
 def resolve_game_version_ids(
     versions: list[dict],
     version_types: list[dict],
     minecraft_version: str,
     java_version: str | None = None,
+    environments: list[str] | None = None,
 ) -> list[int]:
     type_name_by_id = {vt.get("id"): vt.get("name", "") for vt in version_types}
     type_slug_by_id = {vt.get("id"): vt.get("slug", "") for vt in version_types}
@@ -135,6 +158,44 @@ def resolve_game_version_ids(
                     result.append(java_id)
                 break
 
+    # 4. Resolve Environment IDs (Client and/or Server)
+    target_envs = environments if environments is not None else ["client", "server"]
+    env_type_ids = {
+        vt.get("id")
+        for vt in version_types
+        if "environment" in (vt.get("name") or "").lower() or "environment" in (vt.get("slug") or "").lower()
+    }
+
+    for env in target_envs:
+        env_norm = env.strip().lower()
+        env_id: int | None = None
+
+        if env_type_ids:
+            for v in versions:
+                if v.get("gameVersionTypeID") in env_type_ids:
+                    v_name = (v.get("name") or "").strip().lower()
+                    v_slug = (v.get("slug") or "").strip().lower()
+                    if v_name == env_norm or v_slug == env_norm:
+                        env_id = v.get("id")
+                        break
+
+        if env_id is None:
+            for v in versions:
+                v_name = (v.get("name") or "").strip().lower()
+                v_slug = (v.get("slug") or "").strip().lower()
+                if v_name == env_norm or v_slug == env_norm:
+                    env_id = v.get("id")
+                    break
+
+        if env_id is None:
+            env_id = KNOWN_ENV_IDS.get(env_norm)
+
+        if env_id is not None:
+            if env_id not in result:
+                result.append(env_id)
+        else:
+            fail(f"Could not find CurseForge game version ID for environment '{env}'")
+
     return sorted(set(result))
 
 
@@ -144,6 +205,8 @@ def main() -> None:
     user_agent = os.environ.get("CURSEFORGE_USER_AGENT", "curseforge-publisher").strip()
     raw_targets = os.environ.get("TARGETS_JSON", "").strip()
     raw_overrides = os.environ.get("CURSEFORGE_GAME_VERSIONS", "").strip()
+    raw_env = os.environ.get("CURSEFORGE_ENVIRONMENT", "").strip()
+    target_envs = parse_environments(raw_env)
 
     if not project_id_raw:
         fail("Set the repository Actions variable CURSEFORGE_PROJECT_ID")
@@ -179,7 +242,12 @@ def main() -> None:
     if all_overridden:
         for t in targets:
             mc = t.get("minecraft_version")
-            game_versions_map[mc] = overrides[mc]
+            entry = list(overrides[mc])
+            for env in target_envs:
+                eid = KNOWN_ENV_IDS.get(env)
+                if eid and eid not in entry:
+                    entry.append(eid)
+            game_versions_map[mc] = sorted(set(entry))
     else:
         versions_raw = fetch_api("game/versions", token=curseforge_token, user_agent=user_agent)
         if not isinstance(versions_raw, list):
@@ -198,7 +266,12 @@ def main() -> None:
             if not mc:
                 continue
             if mc in overrides:
-                game_versions_map[mc] = overrides[mc]
+                entry = list(overrides[mc])
+                for env in target_envs:
+                    eid = KNOWN_ENV_IDS.get(env)
+                    if eid and eid not in entry:
+                        entry.append(eid)
+                game_versions_map[mc] = sorted(set(entry))
             else:
                 java_ver = t.get("java_version")
                 game_versions_map[mc] = resolve_game_version_ids(
@@ -206,6 +279,7 @@ def main() -> None:
                     types_raw,
                     minecraft_version=mc,
                     java_version=java_ver,
+                    environments=target_envs,
                 )
 
     print(json.dumps({"project_id": str(project_id), "game_versions": game_versions_map}))

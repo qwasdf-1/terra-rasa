@@ -36,11 +36,12 @@ Publishing stops if the tag does not match `mod_version`, a target jar or checks
 3. In this GitHub repository, add the Actions secret `CURSEFORGE_TOKEN` with that token.
 4. Add the numeric project ID as the Actions variable `CURSEFORGE_PROJECT_ID`.
 5. (Optional) If custom game version ID mappings are required, set `CURSEFORGE_GAME_VERSIONS` as a JSON map of Minecraft versions to integer arrays (e.g. `{"1.21.11": [1234, 5678]}`).
-6. Run the Publish to CurseForge workflow from Actions and enter an existing release tag, or allow the Release workflow to dispatch it automatically on new release tags.
+6. (Optional) If the mod should be tagged exclusively for client or server environments, set the Actions variable `CURSEFORGE_ENVIRONMENT` to `client` or `server` (defaults to both `client,server`).
+7. Run the Publish to CurseForge workflow from Actions and enter an existing release tag, or allow the Release workflow to dispatch it automatically on new release tags.
 
 ### Release behavior and dependencies
 
-The CurseForge publisher resolves target game versions (Minecraft version and Fabric loader, plus Java versions where registered) against CurseForge's game versions API. Each target jar is published as a distinct release file with display name `Terra Rasa <version> (Minecraft <target>)`.
+The CurseForge publisher resolves target game versions (Minecraft version and Fabric loader, Java versions where registered, and mandatory Environment tags Client and Server) against CurseForge's game versions API. Each target jar is published as a distinct release file with display name `Terra Rasa <version> (Minecraft <target>)`.
 
 Dependencies are configured in file metadata:
 - Fabric API (`fabric-api`) is declared as a `requiredDependency`.
