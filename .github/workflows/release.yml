@@ -19,6 +19,7 @@ jobs:
         run: echo "matrix=$(jq -c . gradle/minecraft-targets.json)" >> "$GITHUB_OUTPUT"
 
   build:
+    name: build (${{ matrix.minecraft_version }})
     needs: targets
     runs-on: ubuntu-latest
     strategy:
@@ -111,6 +112,16 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: >-
           gh workflow run modrinth.yml
+          --repo "$GH_REPO"
+          --ref main
+          --field tag="$GITHUB_REF_NAME"
+
+      - name: Dispatch CurseForge publishing workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: >-
+          gh workflow run curseforge.yml
           --repo "$GH_REPO"
           --ref main
           --field tag="$GITHUB_REF_NAME"

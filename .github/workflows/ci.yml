@@ -25,6 +25,7 @@ jobs:
         run: python3 scripts/check_doc_boundary.py
 
   build:
+    name: build (${{ matrix.minecraft_version }})
     needs: targets
     runs-on: ubuntu-latest
     strategy:
@@ -53,6 +54,7 @@ jobs:
 
   # The real dedicated-server suite downloads the vanilla server and takes about ten minutes.
   integration:
+    name: integration (${{ matrix.minecraft_version }})
     if: github.event_name == 'workflow_dispatch'
     needs: targets
     runs-on: ubuntu-latest
