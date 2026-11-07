@@ -4,7 +4,6 @@ import java.nio.file.Path;
 import java.util.function.Consumer;
 
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -15,6 +14,9 @@ import net.minecraft.server.level.ServerLevel;
 public final class TerraRasaInitializer implements ModInitializer {
     @Override
     public void onInitialize() {
+        // A Fabric entrypoint runs while the built-in registries still accept additions, which is
+        // the moment the ticket types must be registered; NeoForge does this from its registry event.
+        TerraRasa.registerTicketTypes();
         TerraRasaRuntime.register(new FabricPlatform());
     }
 
@@ -51,12 +53,13 @@ public final class TerraRasaInitializer implements ModInitializer {
 
         @Override
         public void fireLevelLoaded(MinecraftServer server, ServerLevel level) {
-            ServerLevelEvents.LOAD.invoker().onLevelLoad(server, level);
+            // The API name changed between 1.21.11 and 26.x; the version overlay keeps that split.
+            FabricLevelEvents.levelLoaded(server, level);
         }
 
         @Override
         public void fireLevelUnloaded(MinecraftServer server, ServerLevel level) {
-            ServerLevelEvents.UNLOAD.invoker().onLevelUnload(server, level);
+            FabricLevelEvents.levelUnloaded(server, level);
         }
     }
 }

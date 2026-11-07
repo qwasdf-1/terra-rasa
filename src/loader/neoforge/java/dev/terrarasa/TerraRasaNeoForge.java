@@ -3,8 +3,10 @@ package dev.terrarasa;
 import java.nio.file.Path;
 import java.util.function.Consumer;
 
+import net.minecraft.core.registries.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLPaths;
@@ -14,12 +16,20 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.registries.RegisterEvent;
 
 /** NeoForge entrypoint: builds the platform adapter and registers the shared runtime wiring. */
 @Mod(TerraRasa.MOD_ID)
 public final class TerraRasaNeoForge {
-    public TerraRasaNeoForge() {
-        // Runs while the built-in registries still accept the ticket types registered below.
+    public TerraRasaNeoForge(IEventBus modEventBus) {
+        // The built-in registries are already frozen when a mod constructor runs, so the ticket
+        // types register on the mod bus's registry event instead: that fires while vanilla still
+        // accepts additions to them.
+        modEventBus.addListener(RegisterEvent.class, event -> {
+            if (event.getRegistryKey() == Registries.TICKET_TYPE) {
+                TerraRasa.registerTicketTypes();
+            }
+        });
         TerraRasaRuntime.register(new NeoForgePlatform());
     }
 

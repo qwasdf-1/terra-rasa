@@ -16,7 +16,9 @@ public final class TerraRasaRuntime {
     /** Registers lifecycle hooks and optional adapters. Call exactly once per mod load. */
     public static void register(ModPlatform platform) {
         TerraRasa.setPlatform(platform);
-        // Touching the ticket types registers them while the built-in registries accept additions.
+        // Ticket types are registered by each loader's entrypoint at the moment the built-in
+        // registries still accept additions (see TerraRasa.registerTicketTypes), so by now they
+        // are in place and only need to be observable here.
         TerraRasa.LOGGER.debug("Ticket types: {}, {}", WorldPreparationService.PRELOAD_TICKET, Pregenerator.TICKET);
 
         platform.onServerStarted(LivePregeneration::onServerStarted);

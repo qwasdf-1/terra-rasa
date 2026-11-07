@@ -56,9 +56,12 @@ import org.jspecify.annotations.Nullable;
  */
 public final class WorldPreparationService {
     public static final int MAX_READY_RUNS = 3;
-    /** Non-persistent loading ticket: preload tickets must never leak into saved ticket data. */
-    public static final TicketType PRELOAD_TICKET = Registry.register(BuiltInRegistries.TICKET_TYPE,
-            Identifier.fromNamespaceAndPath(TerraRasa.MOD_ID, "preload"), new TicketType(0L, TicketType.FLAG_LOADING));
+    /**
+     * Non-persistent loading ticket: preload tickets must never leak into saved ticket data.
+     * Registered by {@link TerraRasa#registerTicketTypes()} while the built-in registries still
+     * accept additions.
+     */
+    public static TicketType PRELOAD_TICKET;
     private static final AtomicInteger ACTIVE_PREPARATIONS = new AtomicInteger();
     /** After this, close anyway and save what is left synchronously. */
     private static final long FLUSH_WAIT_MILLIS = 60_000L;

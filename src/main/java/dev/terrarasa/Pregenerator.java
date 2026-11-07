@@ -38,9 +38,11 @@ import org.jspecify.annotations.Nullable;
  * per pregenerated chunk.)
  */
 final class Pregenerator {
-    /** Non-persistent: pregeneration tickets never leak into saved ticket data. */
-    static final TicketType TICKET = Registry.register(BuiltInRegistries.TICKET_TYPE,
-            Identifier.fromNamespaceAndPath(TerraRasa.MOD_ID, "pregenerate"), new TicketType(0L, TicketType.FLAG_LOADING));
+    /**
+     * Non-persistent: pregeneration tickets never leak into saved ticket data. Registered by
+     * {@link TerraRasa#registerTicketTypes()} while the built-in registries still accept additions.
+     */
+    static TicketType TICKET;
     static final ChunkStatus TARGET = ChunkStatus.SPAWN;
     /** Chunks started per tick at most; the generation budget usually allows fewer. */
     private static final int STARTS_PER_TICK = 8;

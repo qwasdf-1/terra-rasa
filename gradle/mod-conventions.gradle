@@ -19,10 +19,16 @@ repositories {
     mavenCentral()
 }
 
-sourceSets.main.java.srcDir(rootProject.file("src/versions/${minecraftFamily}/java"))
-sourceSets.main.resources.srcDir(rootProject.file("src/versions/${minecraftFamily}/resources"))
-sourceSets.main.java.srcDir(rootProject.file("src/loader/${loader}/java"))
-sourceSets.main.resources.srcDir(rootProject.file("src/loader/${loader}/resources"))
+// Each project resolves its own overlays: the library and the test host keep separate
+// src/loader/ and src/versions/ trees, and reading the root's would put the library's entrypoint
+// and metadata into the test host's jar.
+sourceSets.main.java.srcDir(project.file("src/versions/${minecraftFamily}/java"))
+sourceSets.main.resources.srcDir(project.file("src/versions/${minecraftFamily}/resources"))
+sourceSets.main.java.srcDir(project.file("src/loader/${loader}/java"))
+// Loader APIs that changed between Minecraft versions (for example Fabric's world-level events
+// are spelled differently in 1.21.11 and 26.x) live beside their loader, one folder per family.
+sourceSets.main.java.srcDir(project.file("src/loader/${loader}/versions/${minecraftFamily}/java"))
+sourceSets.main.resources.srcDir(project.file("src/loader/${loader}/resources"))
 
 dependencies {
     if (neoforgeLoader) {
