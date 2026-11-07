@@ -75,10 +75,12 @@ jobs:
 
   # The real dedicated-server suite downloads the vanilla server and takes about ten minutes.
   # The suite still installs Fabric servers only, so NeoForge rows are skipped rather than run:
-  # the NeoForge install path in gradle/integration-server.gradle and testing/ is still pending.
+  # the NeoForge install path in gradle/integration-server.gradle and testing/ is not validated by
+  # a live run yet. A job-level if cannot read the matrix context, so the loader gate is a step
+  # condition repeated on every step of this job.
   integration:
     name: integration (${{ matrix.minecraft_version }} ${{ matrix.loader }})
-    if: github.event_name == 'workflow_dispatch' && matrix.loader == 'fabric'
+    if: github.event_name == 'workflow_dispatch'
     needs: targets
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -87,22 +89,28 @@ jobs:
       matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v7
+        if: matrix.loader == 'fabric'
 
       - name: Install Java ${{ matrix.java_version }}
+        if: matrix.loader == 'fabric'
         uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: ${{ matrix.java_version }}
 
       - name: Set up Gradle
+        if: matrix.loader == 'fabric'
         uses: gradle/actions/setup-gradle@v6
 
       - name: Install uv
+        if: matrix.loader == 'fabric'
         uses: astral-sh/setup-uv@v6
 
       - name: Integration suite
+        if: matrix.loader == 'fabric'
         run: >-
           ./gradlew integrationTest
+          -Ploader=fabric
           -Ploom_version=${{ matrix.loom_version }}
           -Pminecraft_version=${{ matrix.minecraft_version }}
           -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
