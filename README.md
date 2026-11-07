@@ -1,6 +1,6 @@
 # Terra Rasa
 
-Terra Rasa is a Fabric library for replacing dedicated or integrated server worlds while the server keeps running. It prepares fresh, seeded dimensions in the background, then promotes them under their **real canonical dimension keys**. Players stay connected, and vanilla continues to see `minecraft:overworld`, `minecraft:the_nether`, and `minecraft:the_end` as the active worlds.
+Terra Rasa is a Fabric and NeoForge library for replacing dedicated or integrated server worlds while the server keeps running. It prepares fresh, seeded dimensions in the background, then promotes them under their **real canonical dimension keys**. Players stay connected, and vanilla continues to see `minecraft:overworld`, `minecraft:the_nether`, and `minecraft:the_end` as the active worlds.
 
 That canonical identity is the key difference from temporary-world or dimension-alias approaches: vanilla itself continues to own portal travel, spawn selection, the End fight and gateways, credits, `/seed`, advancements, and data packs that target those dimensions. Terra Rasa replaces the levels behind the keys; it does not emulate each feature around a temporary dimension.
 
@@ -21,7 +21,9 @@ The host mod owns the game rules, player flow, and the decision to reset session
 
 ## Requirements
 
-Terra Rasa provides a separate build for each supported Minecraft version:
+Terra Rasa provides a separate build for each supported Minecraft version and loader.
+
+Fabric builds cover every listed Minecraft version and use Fabric Loader 0.19.5:
 
 | Minecraft | Java | Fabric Loom | Fabric API |
 |---|---:|---:|---|
@@ -32,7 +34,16 @@ Terra Rasa provides a separate build for each supported Minecraft version:
 | 26.2 | 25 | 1.18.4 | 0.161.0+26.2 |
 | 26.3 | 25 | 1.18.4 | 0.165.0+26.3 |
 
-Each build uses Fabric Loader 0.19.5. The full target list is maintained in [`gradle/minecraft-targets.json`](gradle/minecraft-targets.json), and CI builds every target. Terra Rasa 0.3.0 introduced support for dedicated servers and integrated single-player/LAN hosts across the listed targets. Version 0.3.1 fixes legacy Overworld activation on Minecraft 1.21.11. A rendered 26.2 single-player smoke test through Soul Link passed; vanilla LAN guest login remains unverified. The host needs Terra Rasa installed in the client profile for integrated play; remote LAN guests can remain vanilla.
+NeoForge builds exist for the Minecraft versions NeoForge has a stable release for. They use ModDevGradle 2.0.148:
+
+| Minecraft | Java | NeoForge |
+|---|---:|---:|
+| 1.21.11 | 21 | 21.11.48 |
+| 26.1.2 | 25 | 26.1.2.126 |
+| 26.2 | 25 | 26.2.0.93 |
+| 26.3 | 25 | 26.3.0.101 |
+
+The full target list is maintained in [`gradle/minecraft-targets.json`](gradle/minecraft-targets.json), and CI builds every target. Terra Rasa 0.3.0 introduced support for dedicated servers and integrated single-player/LAN hosts across the listed targets. Version 0.3.1 fixes legacy Overworld activation on Minecraft 1.21.11. A rendered 26.2 single-player smoke test through Soul Link passed; vanilla LAN guest login remains unverified. The host needs Terra Rasa installed in the client profile for integrated play; remote LAN guests can remain vanilla.
 
 ## Add it to a host mod
 
@@ -42,7 +53,7 @@ There is not yet a public Maven repository. Publish the library to your local Ma
 ./gradlew publishToMavenLocal
 ```
 
-Then add `mavenLocal()` and the Minecraft-specific artifact to the host's Gradle build. With Fabric Loom, include the library in the host mod's jar so server owners install one mod. For example, the 26.3 build is:
+Then add `mavenLocal()` and the Minecraft- and loader-specific artifact to the host's Gradle build. Include the library in the host mod's jar so server owners install one mod. For example, the 26.3 Fabric build is:
 
 ```groovy
 repositories {
@@ -55,10 +66,13 @@ dependencies {
 }
 ```
 
-Build and publish the matching variant by selecting its Minecraft, Loom, Fabric API, Loader and Java versions from the target matrix. For example, to publish the 26.3 build locally:
+The NeoForge build of the same Minecraft version is the `dev.terrarasa:terra-rasa-mc26.3-neoforge:0.1.0` artifact.
+
+Build and publish the matching variant by selecting its Minecraft version, loader, and that loader's toolchain versions from the target matrix. For example, to publish the 26.3 Fabric build locally:
 
 ```sh
 ./gradlew publishToMavenLocal \\
+  -Ploader=fabric \\
   -Pminecraft_version=26.3 \\
   -Ploom_version=1.18.4 \\
   -Pfabric_loader_version=0.19.5 \\
@@ -66,7 +80,18 @@ Build and publish the matching variant by selecting its Minecraft, Loom, Fabric 
   -Pjava_version=25
 ```
 
-For Minecraft 1.21.11, use Fabric API `0.141.6+1.21.11`, Loom `1.17.21`, and Java 21 instead. Do not use a jar built for a different Minecraft version. Each target has its own Maven artifact ID.
+The same target on NeoForge uses the NeoForge properties instead, and publishes the `-neoforge` artifact:
+
+```sh
+./gradlew publishToMavenLocal \\
+  -Ploader=neoforge \\
+  -Pminecraft_version=26.3 \\
+  -Pmoddev_version=2.0.148 \\
+  -Pneoforge_version=26.3.0.101 \\
+  -Pjava_version=25
+```
+
+For Minecraft 1.21.11, use Fabric API `0.141.6+1.21.11`, Loom `1.17.21`, and Java 21 instead. Do not use a jar built for a different Minecraft version or loader. Each target has its own Maven artifact ID.
 
 ## Host lifecycle
 
@@ -85,7 +110,7 @@ The [test host](testhost/src/main/java/dev/terrarasa/testhost/Host.java) is a co
 ./gradlew integrationTest  # real dedicated server; requires uv and Python 3.14
 ```
 
-The integration suite exercises world swaps, recovery, player continuity, seed handling, and pregeneration on a real Fabric server. The test host and Python server test kit are included in this repository.
+The integration suite exercises world swaps, recovery, player continuity, seed handling, and pregeneration on a real Fabric server; the NeoForge server install path is still being added. The test host and Python server test kit are included in this repository.
 
 ## Documentation
 

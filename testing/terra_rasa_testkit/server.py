@@ -1,4 +1,4 @@
-"""Runs a production-style Fabric dedicated server for one test session."""
+"""Runs a production-style Fabric or NeoForge dedicated server for one test session."""
 
 from __future__ import annotations
 
@@ -30,7 +30,35 @@ VANILLA_DIAGNOSTICS = ("Detected unsafe terrain read during worldgen", "Block-at
 # Lines that must never appear in a healthy run. Expected, deliberately injected failures are filtered
 # by the tests that cause them.
 SUSPICIOUS = re.compile(r"/(ERROR|FATAL)\]|Exception in server tick loop|Encountered an unexpected exception")
+
+FABRIC = "fabric"
+NEOFORGE = "neoforge"
+#: The loaders the prepared install can be built for.
+LOADERS = (FABRIC, NEOFORGE)
+#: Environment variable the Gradle suite task sets to the loader it selected (`-Ploader=...`), because
+#: the same testing/ tree serves both installs and the layout decides how the server is started.
+LOADER_VARIABLE = "MC_TEST_LOADER"
+#: Install entries every session links instead of copying. Fabric: the launcher's downloaded libraries,
+#: its runtime metadata, and the mods. NeoForge: the installer's libraries tree and its mods.
 SHARED = ("libraries", ".fabric", "versions", "mods", "fabric-server-launch.jar", "fabric-server-launcher.properties")
+SHARED_NEOFORGE = ("libraries", "mods")
+#: NeoForge install entries copied into every session instead of linked: a Sync for the other loader
+#: removes them from the install, and a session must outlive that. Copies also make `./run.sh nogui`
+#: work from the session directory for a human debugging it.
+NEOFORGE_RUN_SCRIPTS = ("run.sh", "run.bat")
+#: Shared entries that are directories and may not exist in a fresh install yet.
+SHARED_FABRIC_DIRECTORIES = ("libraries", ".fabric", "versions")
+SHARED_NEOFORGE_DIRECTORIES = ("libraries",)
+#: Where the NeoForge installer keeps the FML launch arguments of the server it installed.
+NEOFORGE_ARGUMENTS_GLOB = "libraries/net/neoforged/neoforge/*/unix_args.txt"
+
+
+def current_loader() -> str:
+    """The loader the Gradle suite task selected; `fabric` keeps working without the variable."""
+    name = os.environ.get(LOADER_VARIABLE, FABRIC).strip().lower()
+    if name not in LOADERS:
+        raise RuntimeError(f"unknown {LOADER_VARIABLE}={name!r}; expected one of {', '.join(LOADERS)}")
+    return name
 
 
 def free_port() -> int:
@@ -47,7 +75,8 @@ class ServerProcess:
     """One isolated server directory (fresh world) sharing the prepared install's libraries and mods.
 
     The defaults drive Terra Rasa's test host; a host mod's suite subclasses this and points the three
-    class attributes at its own config file and commands.
+    class attributes at its own config file and commands. `loader` defaults to the install the Gradle
+    suite task selected, so the same suite runs on a Fabric and on a NeoForge server.
     """
 
     #: Written to config/ before startup with the module's configuration.
@@ -60,7 +89,8 @@ class ServerProcess:
     CONFIG_DEFAULTS: dict[str, Any] = {}
 
     def __init__(self, install: Path, session: str, java: str, packets: PacketIds,
-                 config: dict[str, Any] | None = None, level_seed: int = 4242) -> None:
+                 config: dict[str, Any] | None = None, level_seed: int = 4242,
+                 loader: str | None = None) -> None:
         self.install = install
         self.directory = install / "sessions" / session
         self.java = java
@@ -73,19 +103,35 @@ class ServerProcess:
         self._process: subprocess.Popen[str] | None = None
         self._rcon: Rcon | None = None
         self._bots: list[Bot] = []
+        self.loader = (loader or current_loader()).strip().lower()
+        if self.loader not in LOADERS:
+            raise RuntimeError(f"unknown loader {self.loader!r}; expected one of {', '.join(LOADERS)}")
         self._prepare(config or {}, level_seed)
 
     # ---------------------------------------------------------------------------------------------
     # Setup
 
+    @property
+    def shared(self) -> tuple[str, ...]:
+        """The install entries this session links instead of owning a copy of."""
+        return SHARED_NEOFORGE if self.loader == NEOFORGE else SHARED
+
+    @property
+    def shared_directories(self) -> tuple[str, ...]:
+        """The shared entries that are directories, which a fresh install may not have created."""
+        return SHARED_NEOFORGE_DIRECTORIES if self.loader == NEOFORGE else SHARED_FABRIC_DIRECTORIES
+
     def _prepare(self, config: dict[str, Any], level_seed: int) -> None:
         if self.directory.exists():
             shutil.rmtree(self.directory)
         self.directory.mkdir(parents=True)
-        for name in SHARED:
+        for name in self.shared:
             source = self.install / name
-            if name in ("libraries", ".fabric", "versions"):
+            if name in self.shared_directories:
                 source.mkdir(exist_ok=True)
+            elif not source.exists():
+                raise RuntimeError(f"{self.install} has no {name}; run ./gradlew prepareIntegrationServer "
+                                   f"for a {self.loader} install")
             (self.directory / name).symlink_to(source)
         (self.directory / "eula.txt").write_text("eula=true\n", encoding="utf-8")
         properties = {
@@ -113,6 +159,19 @@ class ServerProcess:
         config_dir = self.directory / "config"
         config_dir.mkdir()
         (config_dir / self.CONFIG_FILE).write_text(json.dumps({**self.CONFIG_DEFAULTS, **config}), encoding="utf-8")
+        if self.loader == NEOFORGE:
+            # Copies, not links: a Sync for the other loader deletes these from the install, and a
+            # session must outlive it. run.sh reads this file, so keep it in step with jvmOptions().
+            for name in NEOFORGE_RUN_SCRIPTS:
+                source = self.install / name
+                if not source.is_file():
+                    raise RuntimeError(f"{self.install} has no {name}; run ./gradlew prepareIntegrationServer "
+                                       f"for a {self.loader} install")
+                shutil.copy2(source, self.directory / name)
+                # The installer makes run.sh executable; a session must keep that usable.
+                (self.directory / name).chmod(source.stat().st_mode & 0o777)
+            (self.directory / "user_jvm_args.txt").write_text(
+                "\n".join(self.jvmOptions()) + "\n", encoding="utf-8")
 
     @property
     def library_data(self) -> Path:
@@ -127,13 +186,35 @@ class ServerProcess:
     # ---------------------------------------------------------------------------------------------
     # Process control
 
-    def start(self, timeout: float = 240.0) -> "ServerProcess":
-        start_index = len(self.lines)
+    def jvmOptions(self) -> list[str]:
+        """The JVM options every session starts with, whatever the loader."""
         # On 2 GB, ZGC stalls allocating threads (the server thread included, for about 35 ms) while two
         # worlds generate at once: pregeneration, and players exploring a freshly swapped world.
+        return ["-Xms1G", f"-Xmx{os.environ.get('MC_TEST_HEAP', '4G')}", "-XX:+UseZGC",
+                f"-D{FAULT_INJECTION_PROPERTY}=true"]
+
+    def neoForgeArgumentsFile(self) -> Path:
+        """The NeoForge install's own FML launch arguments (read by its run.sh)."""
+        files = sorted(self.install.glob(NEOFORGE_ARGUMENTS_GLOB))
+        if len(files) != 1:
+            raise RuntimeError(f"expected one NeoForge arguments file "
+                               f"({NEOFORGE_ARGUMENTS_GLOB}) in {self.install}, found {len(files)}")
+        return files[0]
+
+    def command(self) -> list[str]:
+        """The argv that starts this session's server, for its install's loader."""
+        if self.loader == NEOFORGE:
+            arguments = self.neoForgeArgumentsFile()
+            # The installer's own classpath, module opens and FML program arguments, relative to the
+            # working directory; the same java executable the harness picked for Fabric.
+            return [self.java, *self.jvmOptions(),
+                    f"@{arguments.relative_to(self.install).as_posix()}", "nogui"]
+        return [self.java, *self.jvmOptions(), "-jar", "fabric-server-launch.jar", "nogui"]
+
+    def start(self, timeout: float = 240.0) -> "ServerProcess":
+        start_index = len(self.lines)
         self._process = subprocess.Popen(
-            [self.java, "-Xms1G", f"-Xmx{os.environ.get('MC_TEST_HEAP', '4G')}", "-XX:+UseZGC", f"-D{FAULT_INJECTION_PROPERTY}=true",
-             "-jar", "fabric-server-launch.jar", "nogui"],
+            self.command(),
             cwd=self.directory, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace", bufsize=1)
         threading.Thread(target=self._pump, args=(self._process,), daemon=True).start()

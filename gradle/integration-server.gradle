@@ -1,21 +1,37 @@
 // Real dedicated-server integration testing, shared by the Terra Rasa and Soul Link builds (keep the
 // copies identical).
 //
-// A server install is production-style: the official Fabric server launcher, the pinned vanilla jar,
-// Fabric API and the mod jars under test in mods/. The Python harness in testing/ starts one isolated
-// server per test module, drives it over RCON and connects headless protocol clients.
+// A server install is production-style. Fabric (the default) gets the official Fabric server
+// launcher, the pinned vanilla jar, Fabric API and the mod jars under test in mods/. NeoForge gets
+// the pinned NeoForge installer's own server install - run.sh, run.bat, user_jvm_args.txt and
+// libraries/ - with the same mods/ folder for the mods under test. The Python harness in testing/
+// starts one isolated server per test module, drives it over RCON and connects headless protocol
+// clients.
 //
 // Applying this script defines two closures:
 //   registerServerInstall(name, description, directory, mods) -> TaskProvider<Sync>
 //   registerSuite(name, description, directory, install, pytestArguments) -> TaskProvider<Exec>
 // `mods` is anything a copy spec accepts (a task, a file collection). Pass extra pytest arguments with
 // -Ppytest.args="...".
+//
+// The loader comes from the `loader` Gradle property (-Ploader=neoforge; fabric by default), the same
+// one the build itself reads, and is handed to the Python harness as MC_TEST_LOADER.
 
 def javaVersion = project.java_version.toInteger()
 def minecraftVersion = project.minecraft_version
+def loaderName = (project.findProperty('loader') ?: 'fabric').toString().trim().toLowerCase()
+def neoforgeLoader = loaderName == 'neoforge'
+def neoforgeVersion = project.findProperty('neoforge_version')?.toString()
+
+if (!neoforgeLoader && loaderName != 'fabric') {
+    throw new GradleException("Unknown loader '${loaderName}': use fabric (the default) or neoforge.")
+}
+if (neoforgeLoader && !neoforgeVersion) {
+    throw new GradleException("loader=neoforge needs the neoforge_version property (see gradle.properties).")
+}
 
 configurations {
-    // Exactly the Fabric API artifact that is installed into every test server's mods/ folder.
+    // Exactly the Fabric API artifact that is installed into every Fabric test server's mods/ folder.
     integrationServerMods {
         canBeConsumed = false
         transitive = false
@@ -23,7 +39,10 @@ configurations {
 }
 
 dependencies {
-    integrationServerMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    // The NeoForge install has no API jar to add: the mods under test are the whole mods/ folder.
+    if (!neoforgeLoader) {
+        integrationServerMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    }
 }
 
 def integrationRoot = layout.buildDirectory.dir('integration')
@@ -39,22 +58,100 @@ def javaLauncher = javaToolchains.launcherFor {
     languageVersion = JavaLanguageVersion.of(javaVersion)
 }
 
+// NeoForge: the installer is cached like the Fabric launcher, and the server it installs lives in its
+// own directory so the Sync task that assembles a test server can copy it as a plain input.
+def neoforgeInstallerFile = neoforgeLoader
+        ? integrationRoot.map { it.file("cache/neoforge-${neoforgeVersion}-installer.jar") }
+        : null
+def neoforgeServerDirectory = neoforgeLoader
+        ? integrationRoot.map { it.dir("cache/neoforge-server-${neoforgeVersion}") }
+        : null
+def neoforgeInstallerUrl = "https://maven.neoforged.net/releases/net/neoforged/neoforge/${neoforgeVersion}/neoforge-${neoforgeVersion}-installer.jar"
+
+//: The vanilla server jar the report generator and the protocol version read from: Loom's cached
+//: copy for Fabric, or the one the NeoForge installer downloaded into its install (the bundled
+//: server jar under libraries/net/minecraft/server/<mc>/server-<mc>.jar). That install only exists
+//: once installNeoForgeServer has run, so the NeoForge path is resolved on demand.
+def resolveVanillaServerJar = { ->
+    if (!neoforgeLoader) {
+        return vanillaServerJar
+    }
+    // The installer downloads the bundled vanilla server jar into its own libraries tree, one
+    // directory per Minecraft version; the report generator runs it like Loom's cached copy.
+    def libraries = new File(neoforgeServerDirectory.get().asFile, 'libraries/net/minecraft/server')
+    def expected = new File(libraries, "${minecraftVersion}/server-${minecraftVersion}.jar")
+    if (expected.isFile()) {
+        return expected
+    }
+    def jars = project.fileTree(dir: libraries) { include '**/server-*.jar' }.files
+    if (jars.isEmpty()) {
+        throw new GradleException("The NeoForge install has no vanilla server jar under ${libraries}; run ./gradlew installNeoForgeServer.")
+    }
+    return jars.first()
+}
+
 ext.integrationRoot = integrationRoot
 
-def downloadFabricServerLauncher = tasks.register('downloadFabricServerLauncher') {
-    group = 'verification'
-    description = 'Downloads the pinned Fabric dedicated-server launcher once.'
-    def target = launcherFile
-    def url = "https://meta.fabricmc.net/v2/versions/loader/${minecraftVersion}/${project.fabric_loader_version}/${fabricInstallerVersion}/server/jar"
-    inputs.property('url', url)
-    outputs.file(target)
-    doLast {
-        def file = target.get().asFile
-        file.parentFile.mkdirs()
-        def partial = new File(file.parentFile, file.name + '.part')
-        new URI(url).toURL().withInputStream { input -> partial.withOutputStream { it << input } }
-        if (!partial.renameTo(file)) {
-            throw new GradleException("Could not move ${partial} to ${file}")
+def downloadFabricServerLauncher = null
+def installNeoForgeServer = null
+
+// Each loader registers only its own install work: a Fabric build never touches NeoForge artifacts.
+if (!neoforgeLoader) {
+    downloadFabricServerLauncher = tasks.register('downloadFabricServerLauncher') {
+        group = 'verification'
+        description = 'Downloads the pinned Fabric dedicated-server launcher once.'
+        def target = launcherFile
+        def url = "https://meta.fabricmc.net/v2/versions/loader/${minecraftVersion}/${project.fabric_loader_version}/${fabricInstallerVersion}/server/jar"
+        inputs.property('url', url)
+        outputs.file(target)
+        doLast {
+            def file = target.get().asFile
+            file.parentFile.mkdirs()
+            def partial = new File(file.parentFile, file.name + '.part')
+            new URI(url).toURL().withInputStream { input -> partial.withOutputStream { it << input } }
+            if (!partial.renameTo(file)) {
+                throw new GradleException("Could not move ${partial} to ${file}")
+            }
+        }
+    }
+}
+
+if (neoforgeLoader) {
+    def downloadNeoForgeInstaller = tasks.register('downloadNeoForgeInstaller') {
+        group = 'verification'
+        description = "Downloads the pinned NeoForge ${neoforgeVersion} installer once."
+        def target = neoforgeInstallerFile
+        def url = neoforgeInstallerUrl
+        inputs.property('url', url)
+        outputs.file(target)
+        doLast {
+            def file = target.get().asFile
+            file.parentFile.mkdirs()
+            def partial = new File(file.parentFile, file.name + '.part')
+            new URI(url).toURL().withInputStream { input -> partial.withOutputStream { it << input } }
+            if (!partial.renameTo(file)) {
+                throw new GradleException("Could not move ${partial} to ${file}")
+            }
+        }
+    }
+
+    // Runs the installer once per version; its output is the production server layout the test
+    // servers reuse, so a fresh install replaces whatever the previous run left behind.
+    installNeoForgeServer = tasks.register('installNeoForgeServer', Exec) {
+        group = 'verification'
+        description = "Installs a production-style NeoForge ${neoforgeVersion} dedicated server (run scripts, libraries) once."
+        def target = neoforgeServerDirectory
+        dependsOn(downloadNeoForgeInstaller)
+        inputs.file(neoforgeInstallerFile)
+        inputs.property('neoforgeVersion', neoforgeVersion)
+        inputs.property('minecraftVersion', minecraftVersion)
+        outputs.dir(target)
+        workingDir(target)
+        doFirst {
+            def directory = target.get().asFile
+            directory.mkdirs()
+            executable(javaLauncher.get().executablePath.asFile.absolutePath)
+            args('-jar', neoforgeInstallerFile.get().asFile.absolutePath, '--install-server', directory.absolutePath)
         }
     }
 }
@@ -63,17 +160,24 @@ def generatePacketReport = tasks.register('generatePacketReport', Exec) {
     group = 'verification'
     description = 'Runs the vanilla data generator to produce protocol packet ids for the headless test client.'
     def outputDirectory = packetReportDirectory
-    inputs.file(vanillaServerJar)
+    if (neoforgeLoader) {
+        // The vanilla jar lives in the server install the NeoForge installer produced.
+        dependsOn(installNeoForgeServer)
+        inputs.files(neoforgeServerDirectory)
+    } else {
+        inputs.file(vanillaServerJar)
+    }
     outputs.file(outputDirectory.map { it.file('reports/packets.json') })
     def scratch = layout.buildDirectory.dir('tmp/generatePacketReport')
     workingDir(scratch)
     doFirst {
         scratch.get().asFile.mkdirs()
-        if (!vanillaServerJar.isFile()) {
-            throw new GradleException("Vanilla server jar not found at ${vanillaServerJar}; run ./gradlew build once so Loom caches it.")
+        def jar = resolveVanillaServerJar()
+        if (!jar.isFile()) {
+            throw new GradleException("Vanilla server jar not found at ${jar}; run ./gradlew build so Loom caches it, or ./gradlew installNeoForgeServer for NeoForge.")
         }
         executable(javaLauncher.get().executablePath.asFile.absolutePath)
-        args('-DbundlerMainClass=net.minecraft.data.Main', '-jar', vanillaServerJar.absolutePath,
+        args('-DbundlerMainClass=net.minecraft.data.Main', '-jar', jar.absolutePath,
                 '--reports', '--output', outputDirectory.get().asFile.absolutePath)
     }
 }
@@ -82,28 +186,43 @@ ext.registerServerInstall = { String name, String descriptionText, Provider<Dire
     tasks.register(name, Sync) {
         group = 'verification'
         description = descriptionText
-        dependsOn(downloadFabricServerLauncher)
         into(directory)
-        from(mods) {
-            into('mods')
-        }
-        from(configurations.integrationServerMods) {
-            into('mods')
-        }
-        from(launcherFile) {
-            rename { 'fabric-server-launch.jar' }
-        }
-        // Reuse Loom's cached vanilla jar instead of downloading it again.
-        def launcherProperties = layout.buildDirectory.file("tmp/${name}/fabric-server-launcher.properties")
-        from(launcherProperties)
-        doFirst {
-            def propertiesFile = launcherProperties.get().asFile
-            propertiesFile.parentFile.mkdirs()
-            propertiesFile.text = vanillaServerJar.isFile() ? "serverJar=${vanillaServerJar.absolutePath.replace('\\', '/')}\n" : ''
-        }
-        preserve {
-            // Downloaded libraries and per-session worlds survive re-syncs.
-            include 'libraries/**', '.fabric/**', 'versions/**', 'sessions/**'
+        if (neoforgeLoader) {
+            // The installer's own output is the install: run.sh, run.bat, user_jvm_args.txt,
+            // libraries/** and its neoforge-<version>-installer.jar.log. No Fabric launcher.
+            dependsOn(installNeoForgeServer)
+            from(neoforgeServerDirectory)
+            from(mods) {
+                into('mods')
+            }
+            preserve {
+                // The loader downloads missing runtime libraries on demand, and per-session worlds
+                // live in sessions/; both must survive a re-sync.
+                include 'libraries/**', 'sessions/**'
+            }
+        } else {
+            dependsOn(downloadFabricServerLauncher)
+            from(mods) {
+                into('mods')
+            }
+            from(configurations.integrationServerMods) {
+                into('mods')
+            }
+            from(launcherFile) {
+                rename { 'fabric-server-launch.jar' }
+            }
+            // Reuse Loom's cached vanilla jar instead of downloading it again.
+            def launcherProperties = layout.buildDirectory.file("tmp/${name}/fabric-server-launcher.properties")
+            from(launcherProperties)
+            doFirst {
+                def propertiesFile = launcherProperties.get().asFile
+                propertiesFile.parentFile.mkdirs()
+                propertiesFile.text = vanillaServerJar.isFile() ? "serverJar=${vanillaServerJar.absolutePath.replace('\\', '/')}\n" : ''
+            }
+            preserve {
+                // Downloaded libraries and per-session worlds survive re-syncs.
+                include 'libraries/**', '.fabric/**', 'versions/**', 'sessions/**'
+            }
         }
     }
 }
@@ -126,12 +245,14 @@ ext.registerSuite = { String name, String descriptionText, Provider<Directory> d
             environment('MC_TEST_SERVER_DIR', directory.get().asFile.absolutePath)
             environment('MC_TEST_JAVA', javaLauncher.get().executablePath.asFile.absolutePath)
             environment('MC_TEST_PACKETS_JSON', reports.get().file('reports/packets.json').asFile.absolutePath)
+            // The harness starts the server the way this loader's production install starts it.
+            environment('MC_TEST_LOADER', loaderName)
             // The protocol bot must announce the exact protocol used by this target. Read it from
             // the same vanilla jar that generated packets.json instead of maintaining a version map.
-            new java.util.zip.ZipFile(vanillaServerJar).withCloseable { jar ->
+            new java.util.zip.ZipFile(resolveVanillaServerJar()).withCloseable { jar ->
                 def entry = jar.getEntry('version.json')
                 if (entry == null) {
-                    throw new GradleException("Minecraft server jar has no version.json: ${vanillaServerJar}")
+                    throw new GradleException("Minecraft server jar has no version.json: ${jar.getName()}")
                 }
                 def versionInfo = new groovy.json.JsonSlurper().parse(jar.getInputStream(entry))
                 environment('MC_TEST_PROTOCOL_VERSION', versionInfo.protocol_version.toString())

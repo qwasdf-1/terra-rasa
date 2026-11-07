@@ -25,7 +25,7 @@ jobs:
         run: python3 scripts/check_doc_boundary.py
 
   build:
-    name: build (${{ matrix.minecraft_version }})
+    name: build (${{ matrix.minecraft_version }} ${{ matrix.loader }})
     needs: targets
     runs-on: ubuntu-latest
     strategy:
@@ -43,19 +43,42 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # Each target row carries the loader's own toolchain properties: Loom, Fabric Loader and
+      # Fabric API for Fabric rows, ModDevGradle and NeoForge for NeoForge rows.
       - name: Build and unit tests
-        run: >-
-          ./gradlew build
-          -Ploom_version=${{ matrix.loom_version }}
-          -Pminecraft_version=${{ matrix.minecraft_version }}
-          -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
-          -Pfabric_api_version=${{ matrix.fabric_api_version }}
-          -Pjava_version=${{ matrix.java_version }}
+        run: |
+          set -euo pipefail
+          case "${{ matrix.loader }}" in
+            fabric)
+              args=(
+                -Ploader=${{ matrix.loader }}
+                -Ploom_version=${{ matrix.loom_version }}
+                -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
+                -Pfabric_api_version=${{ matrix.fabric_api_version }}
+              )
+              ;;
+            neoforge)
+              args=(
+                -Ploader=${{ matrix.loader }}
+                -Pmoddev_version=${{ matrix.moddev_version }}
+                -Pneoforge_version=${{ matrix.neoforge_version }}
+              )
+              ;;
+            *)
+              echo "Unsupported loader '${{ matrix.loader }}' for Minecraft ${{ matrix.minecraft_version }}" >&2
+              exit 1
+              ;;
+          esac
+          ./gradlew build "${args[@]}" \
+            -Pminecraft_version=${{ matrix.minecraft_version }} \
+            -Pjava_version=${{ matrix.java_version }}
 
   # The real dedicated-server suite downloads the vanilla server and takes about ten minutes.
+  # The suite still installs Fabric servers only, so NeoForge rows are skipped rather than run:
+  # the NeoForge install path in gradle/integration-server.gradle and testing/ is still pending.
   integration:
-    name: integration (${{ matrix.minecraft_version }})
-    if: github.event_name == 'workflow_dispatch'
+    name: integration (${{ matrix.minecraft_version }} ${{ matrix.loader }})
+    if: github.event_name == 'workflow_dispatch' && matrix.loader == 'fabric'
     needs: targets
     runs-on: ubuntu-latest
     timeout-minutes: 45

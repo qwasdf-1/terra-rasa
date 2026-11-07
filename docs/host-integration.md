@@ -100,10 +100,12 @@ Run player reset while each player's current level is still open. The host then 
 
 ## 6. Notify mods that retain level references
 
-Fabric's load and unload events still fire. Mods that cache `ServerLevel` objects should also use Terra Rasa's paired replacement events:
+The loader's own load and unload events still fire. Mods that cache `ServerLevel` objects should also use Terra Rasa's paired replacement events:
 
-- `CanonicalLevelEvents.BEFORE_RETIRE` runs on the server thread before any old level closes. A listener may cancel activation by throwing `LifecycleException`.
-- `CanonicalLevelEvents.REPLACED` provides the replacement levels after a successful swap and after a rollback. Rebind cached references here; listener exceptions are logged because activation has already completed.
+- `CanonicalLevelEvents.registerBeforeRetire` adds a listener that runs on the server thread before any old level closes. A listener may cancel activation by throwing `LifecycleException`.
+- `CanonicalLevelEvents.registerReplaced` adds a listener that runs on the server thread once the replacement levels are live, after a successful swap and after a rollback. Rebind cached references there; listener exceptions are logged because activation has already completed.
+
+These are plain listener lists, not loader events: the same API works under Fabric and NeoForge.
 
 Terra Rasa includes an optional Chunky adapter. It cancels active tasks against worlds being replaced and updates the selected world after the swap.
 

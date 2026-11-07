@@ -6,7 +6,6 @@ import java.util.Set;
 import java.util.List;
 
 import dev.terrarasa.mixin.PrimaryLevelDataAccessor;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
@@ -77,11 +76,11 @@ public final class MinecraftCompat {
     }
 
     public static void levelLoaded(MinecraftServer server, ServerLevel level) {
-        ServerWorldEvents.LOAD.invoker().onWorldLoad(server, level);
+        TerraRasa.platform().fireLevelLoaded(server, level);
     }
 
     public static void levelUnloaded(MinecraftServer server, ServerLevel level) {
-        ServerWorldEvents.UNLOAD.invoker().onWorldUnload(server, level);
+        TerraRasa.platform().fireLevelUnloaded(server, level);
     }
 
     public static void resetWorldRunState(MinecraftServer server) {

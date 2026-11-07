@@ -17,3 +17,6 @@ module-root = ""
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+markers = [
+    "neoforge: applies to the NeoForge install only (./gradlew integrationTest -Ploader=neoforge)",
+]

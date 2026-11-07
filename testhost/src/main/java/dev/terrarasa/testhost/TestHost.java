@@ -13,45 +13,45 @@ import dev.terrarasa.CanonicalLevelEvents;
 import dev.terrarasa.DimensionPolicy;
 import dev.terrarasa.Json;
 import dev.terrarasa.PinnedSeed;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Test-only host mod for Terra Rasa. It does what a game mod does (choose a policy, prepare worlds, move
- * players out, activate, reset session state) and exposes each step as a {@code /terrarasa} command, so
+ * the players out, activate, reset session state) and exposes each step as a {@code /terrarasa} command, so
  * the library's integration suite runs without any particular game on top.
+ *
+ * <p>The loader entrypoint overlays build a {@link HostPlatform} and call {@link #bootstrap}; everything
+ * below that boundary is loader-neutral.
  */
-public final class TestHost implements ModInitializer {
+public final class TestHost {
     /** Where players wait while the canonical worlds are replaced; never reset. */
     static final Identifier HOLDING = Identifier.fromNamespaceAndPath("terrarasa_testhost", "holding");
 
     private static @Nullable Host host;
 
-    @Override
-    public void onInitialize() {
-        Config config = Config.load(FabricLoader.getInstance().getConfigDir().resolve("terrarasa-testhost.json"));
+    /** Registers every hook the host needs. Call exactly once per mod load. */
+    static void bootstrap(HostPlatform platform) {
+        Config config = Config.load(platform.configFile("terrarasa-testhost.json"));
         DimensionPolicy policy = config.policy();
         PinnedSeed.setPolicy(policy);
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-                HostCommands.register(dispatcher));
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+
+        platform.registerCommands(HostCommands::register);
+        platform.onServerStarted(server -> {
             host = new Host(server, policy, config.preloadRadius, config.pregenerationRadii(),
                     Duration.ofSeconds(config.preparationTimeoutSeconds));
             host.started();
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> host = null);
-        CanonicalLevelEvents.BEFORE_RETIRE.register((server, retiring) -> {
+        platform.onServerStopped(() -> host = null);
+        CanonicalLevelEvents.registerBeforeRetire((server, retiring) -> {
             if (host != null) {
                 host.beforeRetire(retiring);
             }
         });
         // Library work runs at the end of a server tick, as in a real host.
-        ServerTickEvents.END_SERVER_TICK.register(server -> {
+        platform.onEndServerTick(server -> {
             if (host != null) {
                 host.tick();
             }
@@ -82,7 +82,7 @@ public final class TestHost implements ModInitializer {
                 Config config = Json.GSON.fromJson(Files.readString(file), Config.class);
                 return config != null ? config : new Config();
             } catch (IOException e) {
-                throw new IllegalStateException("unreadable " + file, e);
+                throw new IllegalStateException("unreadable " + file);
             }
         }
 

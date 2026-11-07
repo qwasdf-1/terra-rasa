@@ -30,8 +30,8 @@ public final class ChunkyCompat {
     }
 
     public static void register() {
-        CanonicalLevelEvents.BEFORE_RETIRE.register(ChunkyCompat::cancelTasks);
-        CanonicalLevelEvents.REPLACED.register(ChunkyCompat::rebindSelection);
+        CanonicalLevelEvents.registerBeforeRetire(ChunkyCompat::cancelTasks);
+        CanonicalLevelEvents.registerReplaced(ChunkyCompat::rebindSelection);
         TerraRasa.LOGGER.info("Chunky detected: tasks and selections follow canonical level replacement");
     }
 

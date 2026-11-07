@@ -2,14 +2,21 @@
 plugins {
     id 'net.fabricmc.fabric-loom' apply false
     id 'net.fabricmc.fabric-loom-remap' apply false
+    id 'net.neoforged.moddev' apply false
 }
 
+def neoforgeLoader = (rootProject.findProperty('loader') ?: 'fabric') == 'neoforge'
 def obfuscatedMinecraft = rootProject.minecraft_version.startsWith('1.')
-apply plugin: obfuscatedMinecraft ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
 
-if (obfuscatedMinecraft) {
-    dependencies {
-        mappings loom.officialMojangMappings()
+if (neoforgeLoader) {
+    apply plugin: 'net.neoforged.moddev'
+} else {
+    apply plugin: obfuscatedMinecraft ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
+
+    if (obfuscatedMinecraft) {
+        dependencies {
+            mappings loom.officialMojangMappings()
+        }
     }
 }
 
