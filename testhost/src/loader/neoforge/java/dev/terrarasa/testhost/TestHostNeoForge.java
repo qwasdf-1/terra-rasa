@@ -15,7 +15,7 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /** NeoForge entrypoint for the test host. */
-@Mod("terrarasa-testhost")
+@Mod("terrarasa_testhost")
 public final class TestHostNeoForge {
     public TestHostNeoForge() {
         TestHost.bootstrap(new NeoForgePlatform());

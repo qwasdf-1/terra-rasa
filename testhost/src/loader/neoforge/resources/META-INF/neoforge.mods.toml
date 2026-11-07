@@ -4,28 +4,28 @@ license="Apache-2.0"
 issueTrackerUrl="https://github.com/qwasdf-1/terra-rasa/issues"
 
 [[mods]]
-modId="terrarasa-testhost"
+modId="terrarasa_testhost"
 version="${version}"
 displayName="Terra Rasa Test Host"
 description="Test-only host mod that drives Terra Rasa from commands. Never install it on a real server."
 
 # The table name is this mod's own id: NeoForge reads [[dependencies.<modId>]] for each mod's
 # dependencies, and the modId field inside each entry names the dependency.
-[[dependencies.terrarasa-testhost]]
+[[dependencies.terrarasa_testhost]]
 modId="neoforge"
 type="required"
 versionRange="[${loader_version},)"
 ordering="NONE"
 side="SERVER"
 
-[[dependencies.terrarasa-testhost]]
+[[dependencies.terrarasa_testhost]]
 modId="minecraft"
 type="required"
 versionRange="[${minecraft_version}]"
 ordering="NONE"
 side="SERVER"
 
-[[dependencies.terrarasa-testhost]]
+[[dependencies.terrarasa_testhost]]
 modId="terrarasa"
 type="required"
 versionRange="[${version},)"
