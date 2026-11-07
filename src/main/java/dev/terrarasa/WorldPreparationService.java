@@ -66,6 +66,12 @@ public final class WorldPreparationService {
     /** After this, close anyway and save what is left synchronously. */
     private static final long FLUSH_WAIT_MILLIS = 60_000L;
     /**
+     * Ticks the flush waits for the released chunks to start unloading before it closes and saves
+     * the levels instead. One second is enough for a loader that unloads promptly, and short enough
+     * that a loader which never unloads them does not stall every activation.
+     */
+    private static final int FLUSH_DRAIN_GRACE_TICKS = 20;
+    /**
      * Chunk tickets added per tick. Each ticket eventually costs the server thread a chunk promotion to
      * full status; adding a few per tick spreads that work instead of finishing a whole square in one tick.
      */
@@ -561,9 +567,26 @@ public final class WorldPreparationService {
         // Let the normal server tick unload the released chunks: vanilla saves each one through the IO worker
         // as it unloads, a little per tick. Closing earlier would save every chunk still loaded in one tick.
         preparation.chunks.releaseQueued(TICKETS_PER_TICK);
+        int stillLoaded = 0;
+        for (ServerLevel level : preparation.levels.values()) {
+            stillLoaded += level.getChunkSource().getLoadedChunksCount();
+        }
+        // Waiting only helps while the released chunks are really unloading. A loader that keeps a
+        // staged chunk loaded after its ticket was released (NeoForge does) would make every
+        // activation pay the full FLUSH_WAIT_MILLIS for nothing, so once the drain has stalled for a
+        // second the levels are closed and saved instead: that is the only way they end anyway.
+        boolean draining = preparation.chunks.hasQueuedReleases() || stillLoaded < preparation.lastFlushLoaded;
+        preparation.lastFlushLoaded = stillLoaded;
+        if (draining) {
+            preparation.flushStalledTicks = 0;
+        } else {
+            preparation.flushStalledTicks++;
+        }
         boolean busy = preparation.chunks.hasQueuedReleases() || preparation.levels.values().stream().anyMatch(level ->
                 level.getChunkSource().chunkMap.hasWork() || level.getChunkSource().getLoadedChunksCount() > 0);
-        if (busy && preparation.phaseElapsedMillis() < FLUSH_WAIT_MILLIS) {
+        boolean waitedOut = preparation.phaseElapsedMillis() >= FLUSH_WAIT_MILLIS
+                || !draining && preparation.flushStalledTicks >= FLUSH_DRAIN_GRACE_TICKS;
+        if (busy && !waitedOut) {
             return;
         }
         // Then write everything out in the background; the close below finds nothing left to wait for.
@@ -819,6 +842,12 @@ public final class WorldPreparationService {
         final StagedChunkTickets chunks = new StagedChunkTickets(PRELOAD_TICKET);
         final List<Pregenerator> pregenerators = new ArrayList<>();
         boolean finishRequested;
+        /**
+         * The staged levels' loaded-chunk count and how many flush ticks it has not fallen, used to
+         * tell a draining flush from a stalled one. See {@link #tickFlushing}.
+         */
+        private int lastFlushLoaded = Integer.MAX_VALUE;
+        private int flushStalledTicks;
         private @Nullable CompletableFuture<Void> ioFlush;
         final ArrayDeque<StagedLevel> toConstruct = new ArrayDeque<>();
         final Map<Identifier, Integer> constructionTicks = new LinkedHashMap<>();
