@@ -79,7 +79,6 @@ jobs:
     outputs:
       project_id: ${{ steps.project.outputs.project_id }}
       fabric_api_id: ${{ steps.fabric_api.outputs.project_id }}
-      neoforge_id: ${{ steps.neoforge.outputs.project_id }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -109,15 +108,6 @@ jobs:
           [[ "$(jq -er '.slug' <<< "$project")" == "fabric-api" ]]
           echo "project_id=$(jq -er '.id' <<< "$project")" >> "$GITHUB_OUTPUT"
 
-      # NeoForge builds depend on the loader itself instead of Fabric API.
-      - name: Resolve NeoForge project ID
-        id: neoforge
-        run: |
-          set -euo pipefail
-          project="$(curl --fail-with-body --silent --show-error -H 'User-Agent: qwasdf-1/terra-rasa-github-publisher' https://api.modrinth.com/v2/project/neoforge)"
-          [[ "$(jq -er '.slug' <<< "$project")" == "neoforge" ]]
-          echo "project_id=$(jq -er '.id' <<< "$project")" >> "$GITHUB_OUTPUT"
-
   publish:
     name: publish (${{ matrix.minecraft_version }} ${{ matrix.loader }})
     needs: [release, project]
@@ -132,7 +122,6 @@ jobs:
       MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
       PROJECT_ID: ${{ needs.project.outputs.project_id }}
       FABRIC_API_ID: ${{ needs.project.outputs.fabric_api_id }}
-      NEOFORGE_ID: ${{ needs.project.outputs.neoforge_id }}
       VERSION: ${{ needs.release.outputs.version }}
       MINECRAFT: ${{ matrix.minecraft_version }}
       LOADER: ${{ matrix.loader }}
@@ -166,7 +155,10 @@ jobs:
             neoforge)
               version_suffix="-neoforge"
               loader_label=" NeoForge"
-              required_dependency="$NEOFORGE_ID"
+              # NeoForge is a loader on Modrinth, not a project that can be depended on: there is
+              # no project there to point at, and the loaders field below already declares it.
+              # CurseForge treats the same fact as a loader relation rather than a dependency.
+              required_dependency=""
               ;;
             *)
               echo "Unsupported loader '$LOADER' for Minecraft $MINECRAFT" >&2
@@ -209,7 +201,8 @@ jobs:
                 and .version_type == "release"
                 and .environment == $environment
                 and .status == "listed"
-                and any(.dependencies[]; .project_id == $dependency and .dependency_type == "required")' \
+                and (if $dependency == "" then (.dependencies | length) == 0
+                     else any(.dependencies[]; .project_id == $dependency and .dependency_type == "required") end)' \
               "$existing_response" >/dev/null && [[ "$existing_sha512" == "$expected_sha512" ]]; then
               echo "Modrinth version $version_number already matches the release asset; skipping upload."
               exit 0
@@ -230,7 +223,7 @@ jobs:
             --arg loader "$LOADER" \
             --arg environment "$environment" \
             --arg dependency "$required_dependency" \
-            '{name:$name, version_number:$version, changelog:$changelog, dependencies:[{project_id:$dependency,dependency_type:"required"}], game_versions:[$minecraft], version_type:"release", loaders:[$loader], environment:$environment, featured:false, status:"listed", project_id:$project, file_parts:["modfile"], primary_file:"modfile"}' \
+            '{name:$name, version_number:$version, changelog:$changelog, dependencies:(if $dependency == "" then [] else [{project_id:$dependency,dependency_type:"required"}] end), game_versions:[$minecraft], version_type:"release", loaders:[$loader], environment:$environment, featured:false, status:"listed", project_id:$project, file_parts:["modfile"], primary_file:"modfile"}' \
             > "$RUNNER_TEMP/modrinth-version.json"
           response_file="$RUNNER_TEMP/modrinth-response.json"
           if ! http_status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
