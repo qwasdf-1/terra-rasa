@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.4.1
+
+### Fixed
+
+- Fabric builds now require the Fabric API build they were compiled against as a minimum
+  (`fabric-api` of at least that version) instead of accepting any build at all. Newer builds for
+  the same Minecraft version still work; older ones now produce a clear dependency error instead
+  of a failed method call at runtime.
+- The 26.3 Fabric build is compiled against Fabric API 0.165.2 (was 0.165.0), the newest published
+  build for that version.
+
 ## 0.4.0
 
 ### Added
