@@ -34,11 +34,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Java ${{ matrix.java_version }}
+      - name: Install the Gradle JVM
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: ${{ matrix.java_version }}
+          # The row's java_version is the compile toolchain, passed below as -Pjava_version. The
+          # Gradle JVM itself must be 25 or newer: the buildscript resolves fabric-loom 1.18.4 on
+          # every row - NeoForge rows carry no loom_version of their own and take the default -
+          # and that version asks for a JVM 25+ Gradle to resolve its artifacts. The 1.21.11 rows
+          # therefore compile to 21 bytecode under a 25 Gradle, which is how the local builds run.
+          java-version: '25'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -91,12 +96,14 @@ jobs:
       - uses: actions/checkout@v7
         if: matrix.loader == 'fabric'
 
-      - name: Install Java ${{ matrix.java_version }}
+      - name: Install the Gradle JVM
         if: matrix.loader == 'fabric'
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: ${{ matrix.java_version }}
+          # Same rule as the build job: the Gradle JVM is 25 (fabric-loom 1.18.4 requires it to
+          # resolve), the row's java_version stays the compile toolchain (-Pjava_version below).
+          java-version: '25'
 
       - name: Set up Gradle
         if: matrix.loader == 'fabric'
