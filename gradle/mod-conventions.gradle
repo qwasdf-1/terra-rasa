@@ -65,6 +65,7 @@ processResources {
             minecraft_version: minecraftVersion,
             loader: loader,
             loader_version: neoforgeLoader ? rootProject.neoforge_version : rootProject.fabric_loader_version,
+            fabric_api_version: rootProject.fabric_api_version,
             java_version: javaVersion.toString(),
             mixins_config: minecraftFamily == 'legacy' ? 'terrarasa-legacy.mixins.json' : 'terrarasa-modern.mixins.json'
     ]
