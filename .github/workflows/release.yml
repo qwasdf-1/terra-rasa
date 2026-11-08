@@ -28,11 +28,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Java ${{ matrix.java_version }}
+      - name: Install the Gradle JVM
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: ${{ matrix.java_version }}
+          # Same rule as CI: the row's java_version is the compile toolchain, passed below as
+          # -Pjava_version, while the Gradle JVM itself must be 25 or newer because the
+          # buildscript resolves fabric-loom 1.18.4 on every row, NeoForge rows included.
+          java-version: '25'
 
       - uses: gradle/actions/setup-gradle@v6
 
