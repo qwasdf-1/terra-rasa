@@ -78,11 +78,13 @@ jobs:
             -Pminecraft_version=${{ matrix.minecraft_version }} \
             -Pjava_version=${{ matrix.java_version }}
 
-  # The real dedicated-server suite downloads the vanilla server and takes about ten minutes.
-  # The suite still installs Fabric servers only, so NeoForge rows are skipped rather than run:
-  # the NeoForge install path in gradle/integration-server.gradle and testing/ is not validated by
-  # a live run yet. A job-level if cannot read the matrix context, so the loader gate is a step
-  # condition repeated on every step of this job.
+  # The real dedicated-server suite downloads a server per row and takes about ten minutes. Both
+  # loaders run it: each row passes its own loader's toolchain properties, and the NeoForge
+  # install path - the pinned NeoForge installer's server, assembled by
+  # gradle/integration-server.gradle - was validated by a live 26.2 run (20 passed, 1 skipped).
+  # Rows are marked in gradle/minecraft-targets.json once their suite has actually been run, so a
+  # NeoForge row only runs where that flag is set; the Fabric rows are unmarked and run as before.
+  # A job-level if cannot read the matrix context, so the gate is a step condition.
   integration:
     name: integration (${{ matrix.minecraft_version }} ${{ matrix.loader }})
     if: github.event_name == 'workflow_dispatch'
@@ -94,10 +96,10 @@ jobs:
       matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v7
-        if: matrix.loader == 'fabric'
+        if: matrix.loader == 'fabric' || matrix.integration == true
 
       - name: Install the Gradle JVM
-        if: matrix.loader == 'fabric'
+        if: matrix.loader == 'fabric' || matrix.integration == true
         uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -106,20 +108,38 @@ jobs:
           java-version: '25'
 
       - name: Set up Gradle
-        if: matrix.loader == 'fabric'
+        if: matrix.loader == 'fabric' || matrix.integration == true
         uses: gradle/actions/setup-gradle@v6
 
       - name: Install uv
-        if: matrix.loader == 'fabric'
+        if: matrix.loader == 'fabric' || matrix.integration == true
         uses: astral-sh/setup-uv@v6
 
       - name: Integration suite
-        if: matrix.loader == 'fabric'
-        run: >-
-          ./gradlew integrationTest
-          -Ploader=fabric
-          -Ploom_version=${{ matrix.loom_version }}
-          -Pminecraft_version=${{ matrix.minecraft_version }}
-          -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
-          -Pfabric_api_version=${{ matrix.fabric_api_version }}
-          -Pjava_version=${{ matrix.java_version }}
+        if: matrix.loader == 'fabric' || matrix.integration == true
+        run: |
+          set -euo pipefail
+          case "${{ matrix.loader }}" in
+            fabric)
+              args=(
+                -Ploader=fabric
+                -Ploom_version=${{ matrix.loom_version }}
+                -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
+                -Pfabric_api_version=${{ matrix.fabric_api_version }}
+              )
+              ;;
+            neoforge)
+              args=(
+                -Ploader=neoforge
+                -Pmoddev_version=${{ matrix.moddev_version }}
+                -Pneoforge_version=${{ matrix.neoforge_version }}
+              )
+              ;;
+            *)
+              echo "Unsupported loader '${{ matrix.loader }}' for Minecraft ${{ matrix.minecraft_version }}" >&2
+              exit 1
+              ;;
+          esac
+          ./gradlew integrationTest "${args[@]}" \
+            -Pminecraft_version=${{ matrix.minecraft_version }} \
+            -Pjava_version=${{ matrix.java_version }}

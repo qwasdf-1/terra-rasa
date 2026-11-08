@@ -59,7 +59,8 @@
       "loader": "neoforge",
       "moddev_version": "2.0.148",
       "neoforge_version": "26.2.0.93",
-      "java_version": "25"
+      "java_version": "25",
+      "integration": true
     },
     {
       "minecraft_version": "26.3",
