@@ -32,7 +32,7 @@ Fabric builds cover every listed Minecraft version and use Fabric Loader 0.19.5:
 | 26.1.1 | 25 | 1.18.4 | 0.145.4+26.1.1 |
 | 26.1.2 | 25 | 1.18.4 | 0.155.3+26.1.2 |
 | 26.2 | 25 | 1.18.4 | 0.161.0+26.2 |
-| 26.3 | 25 | 1.18.4 | 0.165.0+26.3 |
+| 26.3 | 25 | 1.18.4 | 0.165.2+26.3 |
 
 NeoForge builds exist for the Minecraft versions NeoForge has a stable release for. They use ModDevGradle 2.0.148:
 
