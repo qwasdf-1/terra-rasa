@@ -6,20 +6,22 @@ import java.util.Set;
 import java.util.List;
 
 import dev.terrarasa.mixin.PrimaryLevelDataAccessor;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.storage.PrimaryLevelData;
 import net.minecraft.world.level.storage.ServerLevelData;
 
 /** Minecraft APIs that changed between the obfuscated 1.21.11 line and 26.x. */
 public final class MinecraftCompat {
+    private static final Identifier OVERWORLD = Identifier.fromNamespaceAndPath("minecraft", "overworld");
+    private static final Identifier NETHER = Identifier.fromNamespaceAndPath("minecraft", "the_nether");
+    private static final Identifier END = Identifier.fromNamespaceAndPath("minecraft", "the_end");
+
     private MinecraftCompat() {
     }
 
@@ -43,13 +45,15 @@ public final class MinecraftCompat {
 
     /** Vanilla 1.21 keeps the three built-in dimensions at the world root and custom dimensions below dimensions/. */
     public static Path dimensionPath(Path worldRoot, Identifier dimension) {
-        if (Level.OVERWORLD.identifier().equals(dimension)) {
+        // The vanilla dimension ids are stable strings. Naming them directly keeps this path free of
+        // the vanilla registry, which unit tests otherwise cannot touch without a bootstrapped game.
+        if (OVERWORLD.equals(dimension)) {
             return worldRoot;
         }
-        if (Level.NETHER.identifier().equals(dimension)) {
+        if (NETHER.equals(dimension)) {
             return worldRoot.resolve("DIM-1");
         }
-        if (Level.END.identifier().equals(dimension)) {
+        if (END.equals(dimension)) {
             return worldRoot.resolve("DIM1");
         }
         return worldRoot.resolve("dimensions").resolve(dimension.getNamespace()).resolve(dimension.getPath());
@@ -57,7 +61,7 @@ public final class MinecraftCompat {
 
     /** The legacy Overworld shares its root with global world files, so swap only these dimension stores. */
     public static List<String> rootDimensionStorageParts(Identifier dimension) {
-        return Level.OVERWORLD.identifier().equals(dimension) ? List.of("region", "entities", "poi", "data") : List.of();
+        return OVERWORLD.equals(dimension) ? List.of("region", "entities", "poi", "data") : List.of();
     }
 
     public static ChunkPos chunkAt(BlockPos pos) {
@@ -77,11 +81,11 @@ public final class MinecraftCompat {
     }
 
     public static void levelLoaded(MinecraftServer server, ServerLevel level) {
-        ServerWorldEvents.LOAD.invoker().onWorldLoad(server, level);
+        TerraRasa.platform().fireLevelLoaded(server, level);
     }
 
     public static void levelUnloaded(MinecraftServer server, ServerLevel level) {
-        ServerWorldEvents.UNLOAD.invoker().onWorldUnload(server, level);
+        TerraRasa.platform().fireLevelUnloaded(server, level);
     }
 
     public static void resetWorldRunState(MinecraftServer server) {

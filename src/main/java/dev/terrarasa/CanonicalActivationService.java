@@ -112,7 +112,7 @@ public final class CanonicalActivationService {
         try {
             journal.phase = ActivationJournal.Phase.RETIRING;
             journal.save(this.paths);
-            CanonicalLevelEvents.BEFORE_RETIRE.invoker().beforeRetire(server,
+            CanonicalLevelEvents.fireBeforeRetire(server,
                     order.stream().map(key -> Objects.requireNonNull(levels.get(key), key::toString)).toList());
             // Live pregeneration lets go of the levels it generates in; after a rollback it resumes in the
             // reopened ones.

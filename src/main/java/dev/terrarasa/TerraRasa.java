@@ -1,5 +1,9 @@
 package dev.terrarasa;
 
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.TicketType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,12 +17,42 @@ import org.slf4j.LoggerFactory;
  * resettable dimensions, and {@link dev.terrarasa.session.SessionReset} returns server-owned and
  * per-player state to the baseline a new world would have. Interrupted swaps are reconciled from the
  * journal at the next startup ({@link StartupRecovery}). Mods that cache levels follow swaps through
- * {@link CanonicalLevelEvents}. The Fabric entrypoint is {@link TerraRasaInitializer}.
+ * {@link CanonicalLevelEvents}. Each loader has its own entrypoint overlay; they share
+ * {@link TerraRasaRuntime}, which records the active {@link ModPlatform} here.
  */
 public final class TerraRasa {
     public static final String MOD_ID = "terrarasa";
     public static final Logger LOGGER = LoggerFactory.getLogger("Terra Rasa");
 
+    private static volatile @org.jspecify.annotations.Nullable ModPlatform platform;
+
     private TerraRasa() {
+    }
+
+    /**
+     * Registers the chunk ticket types. Each loader calls this at the moment the built-in
+     * registries still accept additions: a Fabric entrypoint does, and NeoForge does from its
+     * registry event, because its registries are frozen by the time a {@link net.neoforged.fml.common.Mod}
+     * constructor runs.
+     */
+    public static void registerTicketTypes() {
+        Pregenerator.TICKET = Registry.register(BuiltInRegistries.TICKET_TYPE,
+                Identifier.fromNamespaceAndPath(MOD_ID, "pregenerate"), new TicketType(0L, TicketType.FLAG_LOADING));
+        WorldPreparationService.PRELOAD_TICKET = Registry.register(BuiltInRegistries.TICKET_TYPE,
+                Identifier.fromNamespaceAndPath(MOD_ID, "preload"), new TicketType(0L, TicketType.FLAG_LOADING));
+    }
+
+    /** Records the platform of the loader currently running this mod. Call once, at mod load. */
+    static void setPlatform(ModPlatform value) {
+        platform = value;
+    }
+
+    /** The active loader's platform; available for the whole lifetime of a loaded mod. */
+    public static ModPlatform platform() {
+        ModPlatform current = platform;
+        if (current == null) {
+            throw new IllegalStateException("Terra Rasa has not been initialized by a loader");
+        }
+        return current;
     }
 }

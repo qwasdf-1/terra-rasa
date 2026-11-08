@@ -12,14 +12,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import net.minecraft.SharedConstants;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.Bootstrap;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/**
+ * These suite exercises the journal's own logic only. It deliberately does not bootstrap
+ * Minecraft: that path is loader-coupled (Fabric and NeoForge patch the shared-constants and
+ * registry bootstrap differently) and nothing here touches a registry.
+ */
 class ActivationJournalTest {
     private static final List<String> TARGETS = List.of("overworld", "the_nether", "the_end");
     private static final UUID RUN_ID = UUID.fromString("f89d91e4-e6b3-487c-a201-741e8230e16a");
@@ -28,12 +30,6 @@ class ActivationJournalTest {
     Path world;
     private WorldPaths paths;
     private ActivationJournal journal;
-
-    @BeforeAll
-    static void bootstrapMinecraftRegistries() {
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-    }
 
     @BeforeEach
     void setUp() throws IOException {

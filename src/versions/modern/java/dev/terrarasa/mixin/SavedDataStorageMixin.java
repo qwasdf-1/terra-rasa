@@ -24,10 +24,20 @@ import org.spongepowered.asm.mixin.injection.At;
  */
 @Mixin(SavedDataStorage.class)
 abstract class SavedDataStorageMixin {
+    /**
+     * Wraps vanilla's in-place write of {@code world_gen_settings.dat} into an atomic replace.
+     *
+     * <p>NeoForge redirects the same call to its own
+     * {@code net.neoforged.neoforge.common.IOUtilities.writeNbtCompressed}, which already writes
+     * through a temporary file and atomic move, so the injection has no target on that loader. The
+     * injection therefore requires itself to match on Fabric and is skipped where it cannot: the
+     * guarantee it exists to provide is already met there.
+     */
     @WrapOperation(
             method = "tryWrite",
             at = @At(value = "INVOKE",
-                    target = "Lnet/minecraft/nbt/NbtIo;writeCompressed(Lnet/minecraft/nbt/CompoundTag;Ljava/nio/file/Path;)V"))
+                    target = "Lnet/minecraft/nbt/NbtIo;writeCompressed(Lnet/minecraft/nbt/CompoundTag;Ljava/nio/file/Path;)V"),
+            require = 0)
     private void terrarasa$writeWorldGenSettingsAtomically(CompoundTag tag, Path path, Operation<Void> original,
             @Local(argsOnly = true) SavedDataType<?> type) throws java.io.IOException {
         if (type != WorldGenSettings.TYPE) {

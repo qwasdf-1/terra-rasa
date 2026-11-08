@@ -1,17 +1,21 @@
 # Project reference
 
-Terra Rasa is a server-side Fabric library for preparing fresh seeded worlds
+Terra Rasa is a server-side library for preparing fresh seeded worlds
 and replacing the loaded levels behind vanilla's canonical dimension keys.
 Hosts decide which dimensions reset, how players move, and which session state
 to clear.
 
 ## Supported targets
 
-Terra Rasa builds a separate artifact for each exact Minecraft release. The
-canonical target matrix is `gradle/minecraft-targets.json`; it pins Minecraft,
-Java, Loom, Fabric Loader, and Fabric API. The matrix currently covers
-1.21.11 and 26.1, 26.1.1, 26.1.2, 26.2, and 26.3. The 1.21.11 target uses the
-legacy source overlay; the 26.x targets use the modern overlay.
+Terra Rasa builds a separate artifact for each exact Minecraft release and each
+loader. The canonical target matrix is `gradle/minecraft-targets.json`; it pins
+Minecraft, Java, and the loader toolchain (Loom and Fabric for `loader=fabric`,
+ModDevGradle and NeoForge for `loader=neoforge`). The matrix currently covers
+1.21.11 and 26.1, 26.1.1, 26.1.2, 26.2, and 26.3 on Fabric, and every version
+NeoForge publishes a stable build for. The 1.21.11 target uses the
+legacy source overlay; the 26.x targets use the modern overlay. Loader-specific
+code lives in `src/loader/<loader>/`, and the port decision is recorded in the change
+history of this document set.
 
 ## Public responsibilities
 

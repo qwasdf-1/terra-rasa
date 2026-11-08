@@ -3,15 +3,23 @@ plugins {
     // Resolve both Loom plugin IDs here so target selection below stays property-driven.
     id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
     id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
+    id 'net.neoforged.moddev' version "${moddev_version}" apply false
     id 'maven-publish'
 }
 
+// -Ploader=neoforge swaps the mod platform; without it the build stays a Fabric build.
+def neoforgeLoader = (project.findProperty('loader') ?: 'fabric') == 'neoforge'
 def obfuscatedMinecraft = project.minecraft_version.startsWith('1.')
-apply plugin: obfuscatedMinecraft ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
 
-if (obfuscatedMinecraft) {
-    dependencies {
-        mappings loom.officialMojangMappings()
+if (neoforgeLoader) {
+    apply plugin: 'net.neoforged.moddev'
+} else {
+    apply plugin: obfuscatedMinecraft ? 'net.fabricmc.fabric-loom-remap' : 'net.fabricmc.fabric-loom'
+
+    if (obfuscatedMinecraft) {
+        dependencies {
+            mappings loom.officialMojangMappings()
+        }
     }
 }
 
@@ -20,10 +28,12 @@ apply from: rootProject.file('gradle/mod-conventions.gradle')
 apply from: rootProject.file('gradle/integration-server.gradle')
 
 // Published as a Minecraft-specific artifact; hosts depend on it and usually bundle it with `include`.
+// The loader tag keeps Fabric and NeoForge artifacts of the same game version apart.
+def loaderTag = neoforgeLoader ? '-neoforge' : ''
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId = "terra-rasa-mc${minecraft_version}"
+            artifactId = "terra-rasa-mc${minecraft_version}${loaderTag}"
             from components.java
             pom {
                 name = 'Terra Rasa'
@@ -46,7 +56,7 @@ publishing {
 // The library alone does nothing; the test host drives it the way a game mod would.
 evaluationDependsOn(':testhost')
 def testServerDirectory = integrationRoot.map { it.dir('server') }
-def runtimeJarTask = obfuscatedMinecraft ? 'remapJar' : 'jar'
+def runtimeJarTask = neoforgeLoader || !obfuscatedMinecraft ? 'jar' : 'remapJar'
 def prepareIntegrationServer = registerServerInstall('prepareIntegrationServer',
         'Assembles a production-style Fabric dedicated server with Terra Rasa and its test host.',
         testServerDirectory, files(tasks.named(runtimeJarTask), project(':testhost').tasks.named(runtimeJarTask)))

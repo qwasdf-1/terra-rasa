@@ -25,7 +25,7 @@ jobs:
         run: python3 scripts/check_doc_boundary.py
 
   build:
-    name: build (${{ matrix.minecraft_version }})
+    name: build (${{ matrix.minecraft_version }} ${{ matrix.loader }})
     needs: targets
     runs-on: ubuntu-latest
     strategy:
@@ -34,27 +34,59 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Java ${{ matrix.java_version }}
+      - name: Install the Gradle JVM
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: ${{ matrix.java_version }}
+          # The row's java_version is the compile toolchain, passed below as -Pjava_version. The
+          # Gradle JVM itself must be 25 or newer: the buildscript resolves fabric-loom 1.18.4 on
+          # every row - NeoForge rows carry no loom_version of their own and take the default -
+          # and that version asks for a JVM 25+ Gradle to resolve its artifacts. The 1.21.11 rows
+          # therefore compile to 21 bytecode under a 25 Gradle, which is how the local builds run.
+          java-version: '25'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # Each target row carries the loader's own toolchain properties: Loom, Fabric Loader and
+      # Fabric API for Fabric rows, ModDevGradle and NeoForge for NeoForge rows.
       - name: Build and unit tests
-        run: >-
-          ./gradlew build
-          -Ploom_version=${{ matrix.loom_version }}
-          -Pminecraft_version=${{ matrix.minecraft_version }}
-          -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
-          -Pfabric_api_version=${{ matrix.fabric_api_version }}
-          -Pjava_version=${{ matrix.java_version }}
+        run: |
+          set -euo pipefail
+          case "${{ matrix.loader }}" in
+            fabric)
+              args=(
+                -Ploader=${{ matrix.loader }}
+                -Ploom_version=${{ matrix.loom_version }}
+                -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
+                -Pfabric_api_version=${{ matrix.fabric_api_version }}
+              )
+              ;;
+            neoforge)
+              args=(
+                -Ploader=${{ matrix.loader }}
+                -Pmoddev_version=${{ matrix.moddev_version }}
+                -Pneoforge_version=${{ matrix.neoforge_version }}
+              )
+              ;;
+            *)
+              echo "Unsupported loader '${{ matrix.loader }}' for Minecraft ${{ matrix.minecraft_version }}" >&2
+              exit 1
+              ;;
+          esac
+          ./gradlew build "${args[@]}" \
+            -Pminecraft_version=${{ matrix.minecraft_version }} \
+            -Pjava_version=${{ matrix.java_version }}
 
-  # The real dedicated-server suite downloads the vanilla server and takes about ten minutes.
+  # The real dedicated-server suite downloads a server per row and takes about ten minutes. Both
+  # loaders run it: each row passes its own loader's toolchain properties, and the NeoForge
+  # install path - the pinned NeoForge installer's server, assembled by
+  # gradle/integration-server.gradle - was validated by a live 26.2 run (20 passed, 1 skipped).
+  # Rows are marked in gradle/minecraft-targets.json once their suite has actually been run, so a
+  # NeoForge row only runs where that flag is set; the Fabric rows are unmarked and run as before.
+  # A job-level if cannot read the matrix context, so the gate is a step condition.
   integration:
-    name: integration (${{ matrix.minecraft_version }})
+    name: integration (${{ matrix.minecraft_version }} ${{ matrix.loader }})
     if: github.event_name == 'workflow_dispatch'
     needs: targets
     runs-on: ubuntu-latest
@@ -64,24 +96,50 @@ jobs:
       matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v7
+        if: matrix.loader == 'fabric' || matrix.integration == true
 
-      - name: Install Java ${{ matrix.java_version }}
+      - name: Install the Gradle JVM
+        if: matrix.loader == 'fabric' || matrix.integration == true
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: ${{ matrix.java_version }}
+          # Same rule as the build job: the Gradle JVM is 25 (fabric-loom 1.18.4 requires it to
+          # resolve), the row's java_version stays the compile toolchain (-Pjava_version below).
+          java-version: '25'
 
       - name: Set up Gradle
+        if: matrix.loader == 'fabric' || matrix.integration == true
         uses: gradle/actions/setup-gradle@v6
 
       - name: Install uv
+        if: matrix.loader == 'fabric' || matrix.integration == true
         uses: astral-sh/setup-uv@v6
 
       - name: Integration suite
-        run: >-
-          ./gradlew integrationTest
-          -Ploom_version=${{ matrix.loom_version }}
-          -Pminecraft_version=${{ matrix.minecraft_version }}
-          -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
-          -Pfabric_api_version=${{ matrix.fabric_api_version }}
-          -Pjava_version=${{ matrix.java_version }}
+        if: matrix.loader == 'fabric' || matrix.integration == true
+        run: |
+          set -euo pipefail
+          case "${{ matrix.loader }}" in
+            fabric)
+              args=(
+                -Ploader=fabric
+                -Ploom_version=${{ matrix.loom_version }}
+                -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
+                -Pfabric_api_version=${{ matrix.fabric_api_version }}
+              )
+              ;;
+            neoforge)
+              args=(
+                -Ploader=neoforge
+                -Pmoddev_version=${{ matrix.moddev_version }}
+                -Pneoforge_version=${{ matrix.neoforge_version }}
+              )
+              ;;
+            *)
+              echo "Unsupported loader '${{ matrix.loader }}' for Minecraft ${{ matrix.minecraft_version }}" >&2
+              exit 1
+              ;;
+          esac
+          ./gradlew integrationTest "${args[@]}" \
+            -Pminecraft_version=${{ matrix.minecraft_version }} \
+            -Pjava_version=${{ matrix.java_version }}

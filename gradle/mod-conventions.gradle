@@ -1,32 +1,57 @@
 // Shared setup for every mod in this build (the library and the integration test host).
-// Applied after the Loom plugin; `modArchiveName` must be set before applying.
+// Applied after the platform plugin; `modArchiveName` must be set before applying.
 
 def javaVersion = rootProject.java_version.toInteger()
 def minecraftVersion = rootProject.minecraft_version
 def minecraftFamily = minecraftVersion.startsWith('1.') ? 'legacy' : 'modern'
+// fabric (default) or neoforge; selects metadata, dependencies and the entrypoint overlay.
+def loader = rootProject.findProperty('loader') ?: 'fabric'
+def obfuscatedMinecraft = minecraftVersion.startsWith('1.')
+def neoforgeLoader = loader == 'neoforge'
 
 group = rootProject.maven_group
 version = rootProject.mod_version
 base {
-    archivesName = "${project.ext.modArchiveName}-mc${minecraftVersion}"
+    archivesName = "${project.ext.modArchiveName}-mc${minecraftVersion}${neoforgeLoader ? '-neoforge' : ''}"
 }
 
 repositories {
     mavenCentral()
 }
 
-sourceSets.main.java.srcDir(rootProject.file("src/versions/${minecraftFamily}/java"))
-sourceSets.main.resources.srcDir(rootProject.file("src/versions/${minecraftFamily}/resources"))
+// Each project resolves its own overlays: the library and the test host keep separate
+// src/loader/ and src/versions/ trees, and reading the root's would put the library's entrypoint
+// and metadata into the test host's jar.
+sourceSets.main.java.srcDir(project.file("src/versions/${minecraftFamily}/java"))
+sourceSets.main.resources.srcDir(project.file("src/versions/${minecraftFamily}/resources"))
+sourceSets.main.java.srcDir(project.file("src/loader/${loader}/java"))
+// Loader APIs that changed between Minecraft versions (for example Fabric's world-level events
+// are spelled differently in 1.21.11 and 26.x) live beside their loader, one folder per family.
+sourceSets.main.java.srcDir(project.file("src/loader/${loader}/versions/${minecraftFamily}/java"))
+sourceSets.main.resources.srcDir(project.file("src/loader/${loader}/resources"))
 
 dependencies {
-    minecraft "com.mojang:minecraft:${minecraftVersion}"
-    if (rootProject.minecraft_version.startsWith('1.')) {
-        // The remapping Loom plugin wires mod dependencies through modImplementation.
-        modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
-        modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+    if (neoforgeLoader) {
+        // ModDevGradle supplies the NeoForge runtime and the matching Minecraft jars.
+        project.extensions.getByName('neoForge').version = rootProject.neoforge_version
+        // The unit tests exercise loader-neutral logic on the development Minecraft jars, so they
+        // take the same artifacts the main compile uses instead of the production runtime. No
+        // loader is activated in the test JVM: no test in either mod touches a loader API.
+        project.gradle.projectsEvaluated {
+            ['testCompileClasspath', 'testRuntimeClasspath'].each { name ->
+                configurations.named(name).get().extendsFrom(configurations.named('modDevCompileDependencies'))
+            }
+        }
     } else {
-        implementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
-        implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+        minecraft "com.mojang:minecraft:${minecraftVersion}"
+        if (obfuscatedMinecraft) {
+            // The remapping Loom plugin wires mod dependencies through modImplementation.
+            modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+            modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+        } else {
+            implementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+            implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+        }
     }
 
     testImplementation platform('org.junit:junit-bom:5.12.2')
@@ -36,14 +61,18 @@ dependencies {
 
 processResources {
     def expandedValues = [
-        version: project.version.toString(),
-        minecraft_version: minecraftVersion,
-        loader_version: rootProject.fabric_loader_version,
-        java_version: javaVersion.toString(),
-        mixins_config: minecraftFamily == 'legacy' ? 'terrarasa-legacy.mixins.json' : 'terrarasa-modern.mixins.json'
+            version: project.version.toString(),
+            minecraft_version: minecraftVersion,
+            loader: loader,
+            loader_version: neoforgeLoader ? rootProject.neoforge_version : rootProject.fabric_loader_version,
+            java_version: javaVersion.toString(),
+            mixins_config: minecraftFamily == 'legacy' ? 'terrarasa-legacy.mixins.json' : 'terrarasa-modern.mixins.json'
     ]
     inputs.properties expandedValues
     filesMatching('fabric.mod.json') {
+        expand expandedValues
+    }
+    filesMatching('META-INF/neoforge.mods.toml') {
         expand expandedValues
     }
 }
@@ -62,6 +91,11 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    if (neoforgeLoader) {
+        // The loader's classloader touches java.lang.invoke internals to set up the game
+        // environment the tests bootstrap, so open it for the test JVM.
+        jvmArgs '--add-opens', 'java.base/java.lang.invoke=ALL-UNNAMED'
+    }
 }
 
 tasks.withType(Jar).configureEach {

@@ -5,6 +5,7 @@
 | Product scope, targets, source map | `project-reference.md` |
 | Present implementation status | `current-state.md` |
 | Lifecycle and ownership | `architecture.md`, `host-integration.md` |
+| Loader port decision and plan | `design/neoforge-port.md` |
 | Utility behavior and storage format | `reference.md` |
 | Release setup and per-target artifacts | `publishing.md` |
 | Testable integration example | `testhost/` |
