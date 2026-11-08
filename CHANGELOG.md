@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 0.4.0
+
+### Added
+
+- Build for NeoForge beside Fabric, with one artifact per Minecraft version and loader. NeoForge
+  builds cover 1.21.11 (NeoForge 21.11.48), 26.1.2 (26.1.2.126), 26.2 (26.2.0.93) and 26.3
+  (26.3.0.101) through ModDevGradle 2.0.148; 26.1 and 26.1.1 stay Fabric-only because NeoForge
+  publishes no stable build for them. The library API, the host-integration lifecycle and the
+  unit tests are unchanged and loader-neutral.
+
+### Fixed
+
+- Register staged chunk ticket types through the loader's registry event, so preparation also
+  works on NeoForge, where the registry is already frozen when a mod constructor runs.
+- Let the FLUSHING preparation phase finish when the drain stops rather than waiting out a fixed
+  sixty seconds. NeoForge keeps a staged chunk loaded after its ticket is released, so a swap
+  that takes about four seconds on Fabric paid the whole wait; the same scenario now completes
+  in about 4.4 seconds on NeoForge.
+- Mark the saved-data storage mixin optional on NeoForge, which already writes NBT atomically
+  and therefore has no target there.
+
 ## 0.3.2
 
 ### Added
