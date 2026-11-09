@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.0
+
+### Added
+
+- Backport support for Minecraft 1.21.1 and 1.21.4 on both Fabric and NeoForge.
+- Introduce `dev.terrarasa.ResourceIdentifier` neutral dimension wrapper in common sources, eliminating Mojang `Identifier` / `ResourceLocation` imports from `src/main`.
+- Add `classic` overlay tier for 1.21.1 and 1.21.4 targeting legacy registry and level factory APIs with intermediary-safe dynamic reflection.
+
 ## 0.4.1
 
 ### Fixed
