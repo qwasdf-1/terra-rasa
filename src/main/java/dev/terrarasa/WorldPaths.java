@@ -4,8 +4,6 @@ import java.nio.file.Path;
 import java.util.Objects;
 import java.util.UUID;
 
-import net.minecraft.resources.Identifier;
-
 /** On-disk layout of the library's lifecycle data below the world root. */
 public record WorldPaths(Path worldRoot) {
     public WorldPaths {
@@ -41,8 +39,8 @@ public record WorldPaths(Path worldRoot) {
         return root().resolve("quarantine");
     }
 
-    public Path quarantine(String runLabel, Identifier dimension) {
-        return quarantineRun(runLabel).resolve(dimension.getNamespace()).resolve(dimension.getPath());
+    public Path quarantine(String runLabel, ResourceIdentifier dimension) {
+        return quarantineRun(runLabel).resolve(dimension.namespace()).resolve(dimension.path());
     }
 
     /** Returns the quarantine directory for a journal's generated previous-run label. */
@@ -64,7 +62,7 @@ public record WorldPaths(Path worldRoot) {
     }
 
     /** Resolves the vanilla storage directory using this Minecraft version's dimension layout. */
-    public Path dimension(Identifier dimension) {
+    public Path dimension(ResourceIdentifier dimension) {
         return MinecraftCompat.dimensionPath(this.worldRoot, dimension);
     }
 

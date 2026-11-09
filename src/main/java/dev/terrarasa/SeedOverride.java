@@ -21,7 +21,7 @@ public final class SeedOverride {
 
     public static <T> T construct(ResourceKey<Level> dimension, long seed, Supplier<T> constructor) {
         if (PENDING.get() != null) {
-            throw new IllegalStateException("Nested seed-override level construction for " + dimension.identifier());
+            throw new IllegalStateException("Nested seed-override level construction for " + MinecraftCompat.dimensionId(dimension));
         }
         PENDING.set(new Pending(dimension, seed));
         try {

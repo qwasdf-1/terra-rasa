@@ -17,19 +17,15 @@ import java.util.UUID;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.terrarasa.mixin.MinecraftServerAccessor;
-import dev.terrarasa.mixin.ChunkMapAccessor;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.Util;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.TicketStorage;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.dimension.LevelStem;
 import org.jspecify.annotations.Nullable;
@@ -87,9 +83,9 @@ public final class CanonicalActivationService {
             journal.spawnZ = manifest.spawn.z;
         }
         for (RunManifest.Dimension dimension : manifest.dimensions) {
-            Identifier target = Identifier.parse(dimension.target);
+            ResourceIdentifier target = ResourceIdentifier.parse(dimension.target);
             Path canonical = this.paths.dimension(target);
-            Path stage = this.paths.dimension(Identifier.parse(dimension.stage));
+            Path stage = this.paths.dimension(ResourceIdentifier.parse(dimension.stage));
             ActivationJournal.Move move = new ActivationJournal.Move(dimension.target,
                     this.paths.relativize(canonical),
                     this.paths.relativize(this.paths.quarantine(journal.previousRunLabel, target)),
@@ -201,10 +197,9 @@ public final class CanonicalActivationService {
         long phase = System.nanoTime();
         setGlobalSeed(server, seed);
         Map<ResourceKey<Level>, ServerLevel> levels = ((MinecraftServerAccessor) server).terrarasa$levels();
-        Registry<LevelStem> stems = server.registryAccess().lookupOrThrow(Registries.LEVEL_STEM);
         for (ResourceKey<Level> key : attempt.order) {
             FaultInjection.check(FaultInjection.RECONSTRUCT);
-            LevelStem stem = Objects.requireNonNull(stems.getValue(key.identifier()), () -> "stem " + key);
+            LevelStem stem = Objects.requireNonNull(MinecraftCompat.getStem(server, key), () -> "stem " + key);
             ServerLevel level = LevelFactory.createCanonical(server, key, stem);
             levels.put(key, level);
             attempt.constructed.put(key, level);
@@ -217,10 +212,10 @@ public final class CanonicalActivationService {
 
     private static void bringOnline(MinecraftServer server, Collection<ServerLevel> levels) {
         for (ServerLevel level : levels) {
-            activateSavedTickets(level);
+            MinecraftCompat.activateSavedTickets(level);
             MinecraftCompat.levelLoaded(server, level);
         }
-        server.updateMobSpawningFlags();
+        MinecraftCompat.updateMobSpawningFlags(server);
     }
 
     private void preflight(MinecraftServer server, RunManifest manifest, DimensionPolicy policy) throws LifecycleException {
@@ -228,13 +223,13 @@ public final class CanonicalActivationService {
         if (manifest.state != PreparationState.CLOSED_READY) {
             throw new LifecycleException("Prepared run is not CLOSED_READY: " + manifest.state);
         }
-        if (!SharedConstants.getCurrentVersion().id().equals(manifest.minecraftVersion)) {
+        if (!MinecraftCompat.gameVersionId().equals(manifest.minecraftVersion)) {
             throw new LifecycleException("Prepared run targets Minecraft " + manifest.minecraftVersion);
         }
         if (!RegistryFingerprint.compute(server, policy).equals(manifest.fingerprint)) {
             throw new LifecycleException("Registry/data-pack fingerprint changed since preparation");
         }
-        List<Identifier> targets = manifest.dimensions.stream().map(d -> Identifier.parse(d.target)).toList();
+        List<ResourceIdentifier> targets = manifest.dimensions.stream().map(d -> ResourceIdentifier.parse(d.target)).toList();
         if (!targets.equals(policy.resettable())) {
             throw new LifecycleException("Prepared dimensions " + targets + " do not match policy " + policy.resettable());
         }
@@ -242,7 +237,7 @@ public final class CanonicalActivationService {
             throw new LifecycleException("Prepared run has no spawn");
         }
         for (RunManifest.Dimension dimension : manifest.dimensions) {
-            Identifier target = Identifier.parse(dimension.target);
+            ResourceIdentifier target = ResourceIdentifier.parse(dimension.target);
             if (policy.classify(target) != DimensionClass.RESETTABLE_CANONICAL) {
                 throw new LifecycleException(target + " is not resettable");
             }
@@ -253,14 +248,14 @@ public final class CanonicalActivationService {
             if (!live.players().isEmpty()) {
                 throw new LifecycleException("Players are still inside " + target);
             }
-            if (server.getLevel(dimensionKey(Identifier.parse(dimension.stage))) != null) {
+            if (server.getLevel(dimensionKey(ResourceIdentifier.parse(dimension.stage))) != null) {
                 throw new LifecycleException("Staged level " + dimension.stage + " is still open");
             }
-            if (!Files.isDirectory(this.paths.dimension(Identifier.parse(dimension.stage)))) {
+            if (!Files.isDirectory(this.paths.dimension(ResourceIdentifier.parse(dimension.stage)))) {
                 throw new LifecycleException("Staged data missing for " + target);
             }
         }
-        for (Identifier persistent : policy.persistent()) {
+        for (ResourceIdentifier persistent : policy.persistent()) {
             if (server.getLevel(dimensionKey(persistent)) == null) {
                 throw new LifecycleException("Persistent level " + persistent + " is not loaded");
             }
@@ -300,23 +295,23 @@ public final class CanonicalActivationService {
             ResourceKey<Level> key = entry.getKey();
             ServerLevel level = entry.getValue();
             if (server.getLevel(key) != level) {
-                throw new LifecycleException("getLevel(" + key.identifier() + ") does not return the new level");
+                throw new LifecycleException("getLevel(" + MinecraftCompat.dimensionId(key) + ") does not return the new level");
             }
             if (!level.dimension().equals(key)) {
-                throw new LifecycleException("New level reports dimension " + level.dimension().identifier());
+                throw new LifecycleException("New level reports dimension " + MinecraftCompat.dimensionId(level.dimension()));
             }
             if (retired.containsValue(level)) {
-                throw new LifecycleException("A retired level object is still mapped as " + key.identifier());
+                throw new LifecycleException("A retired level object is still mapped as " + MinecraftCompat.dimensionId(key));
             }
             if (((SeedOverride.Holder) level).terrarasa$seedOverride() != null || level.getSeed() != seed) {
-                throw new LifecycleException("Level " + key.identifier() + " does not use the run seed");
+                throw new LifecycleException("Level " + MinecraftCompat.dimensionId(key) + " does not use the run seed");
             }
         }
         if (server.overworld() != constructed.get(Level.OVERWORLD)) {
             throw new LifecycleException("server.overworld() is not the new Overworld");
         }
         for (RunManifest.Dimension dimension : manifest.dimensions) {
-            if (server.getLevel(dimensionKey(Identifier.parse(dimension.stage))) != null) {
+            if (server.getLevel(dimensionKey(ResourceIdentifier.parse(dimension.stage))) != null) {
                 throw new LifecycleException("Staged identity " + dimension.stage + " is still registered");
             }
         }
@@ -360,13 +355,12 @@ public final class CanonicalActivationService {
             }
             journal.rollBackFiles(this.paths);
             setGlobalSeed(server, journal.previousSeed);
-            Registry<LevelStem> stems = server.registryAccess().lookupOrThrow(Registries.LEVEL_STEM);
             List<ServerLevel> restored = new ArrayList<>();
             for (ResourceKey<Level> key : order) {
                 if (!retired.containsKey(key)) {
                     continue;
                 }
-                ServerLevel level = LevelFactory.createCanonical(server, key, Objects.requireNonNull(stems.getValue(key.identifier())));
+                ServerLevel level = LevelFactory.createCanonical(server, key, Objects.requireNonNull(MinecraftCompat.getStem(server, key)));
                 levels.put(key, level);
                 restored.add(level);
             }
@@ -397,19 +391,12 @@ public final class CanonicalActivationService {
         MinecraftCompat.setWorldSeed(server, seed);
     }
 
-    private static void activateSavedTickets(ServerLevel level) {
-        TicketStorage tickets = level.getDataStorage().get(TicketStorage.TYPE);
-        if (tickets != null) {
-            tickets.activateAllDeactivatedTickets();
-        }
-    }
-
     /** Old data is only deleted after commit, asynchronously, once no reader or writer remains. */
     private void cleanupAfterCommit(UUID runId, ActivationJournal journal) {
         Path quarantine = this.paths.quarantineRun(journal.previousRunLabel);
         Path stageRoot = this.paths.stageDimensionsRoot(runId);
         Path manifestDir = this.paths.manifest(runId).getParent();
-        Util.ioPool().execute(() -> {
+        MinecraftCompat.runAsync(() -> {
             try {
                 AtomicFiles.deleteRecursively(quarantine);
                 AtomicFiles.deleteRecursively(manifestDir);
@@ -426,8 +413,8 @@ public final class CanonicalActivationService {
         this.lastTimings.put(phase, (System.nanoTime() - startedNanos) / 1_000_000L);
     }
 
-    public static ResourceKey<Level> dimensionKey(Identifier id) {
-        return ResourceKey.create(Registries.DIMENSION, id);
+    public static ResourceKey<Level> dimensionKey(ResourceIdentifier id) {
+        return MinecraftCompat.dimensionKey(id);
     }
 
     /** Retired level objects still reachable from somewhere (a leak indicator, meaningful after GC). */
@@ -453,9 +440,9 @@ public final class CanonicalActivationService {
         for (Map.Entry<ResourceKey<Level>, ServerLevel> entry : ((MinecraftServerAccessor) server).terrarasa$levels().entrySet()) {
             ServerLevel level = entry.getValue();
             JsonObject json = new JsonObject();
-            json.addProperty("key", entry.getKey().identifier().toString());
-            json.addProperty("dimension", level.dimension().identifier().toString());
-            json.addProperty("class", policy.classify(entry.getKey().identifier()).name());
+            json.addProperty("key", MinecraftCompat.dimensionId(entry.getKey()).toString());
+            json.addProperty("dimension", MinecraftCompat.dimensionId(level.dimension()).toString());
+            json.addProperty("class", policy.classify(MinecraftCompat.dimensionId(entry.getKey())).name());
             json.addProperty("identity", Integer.toHexString(System.identityHashCode(level)));
             json.addProperty("seed", level.getSeed());
             Long override = ((SeedOverride.Holder) level).terrarasa$seedOverride();
@@ -464,10 +451,7 @@ public final class CanonicalActivationService {
             }
             json.addProperty("players", level.players().size());
             json.addProperty("loadedChunks", level.getChunkSource().getLoadedChunksCount());
-            int[] ticking = {0};
-            ((ChunkMapAccessor) level.getChunkSource().chunkMap)
-                    .terrarasa$forEachBlockTickingChunk(chunk -> ticking[0]++);
-            json.addProperty("tickingChunks", ticking[0]);
+            json.addProperty("tickingChunks", MinecraftCompat.countTickingChunks(level));
             array.add(json);
         }
         return array;

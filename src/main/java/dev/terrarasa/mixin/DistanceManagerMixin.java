@@ -36,7 +36,7 @@ public abstract class DistanceManagerMixin {
         this.terrarasa$currentBatch = List.of();
     }
 
-    @Redirect(method = "runAllUpdates", at = @At(value = "INVOKE", target = "Ljava/util/Set;iterator()Ljava/util/Iterator;"))
+    @Redirect(method = "runAllUpdates", at = @At(value = "INVOKE", target = "Ljava/util/Set;iterator()Ljava/util/Iterator;"), require = 0)
     private Iterator<ChunkHolder> terrarasa$iterateUpdateBatch(Set<ChunkHolder> pending) {
         synchronized (pending) {
             this.terrarasa$currentBatch = new ArrayList<>(pending);
@@ -44,7 +44,19 @@ public abstract class DistanceManagerMixin {
         return this.terrarasa$currentBatch.iterator();
     }
 
-    @Redirect(method = "runAllUpdates", at = @At(value = "INVOKE", target = "Ljava/util/Set;clear()V"))
+    @Redirect(method = "runAllUpdates", at = @At(value = "INVOKE", target = "Ljava/util/Set;forEach(Ljava/util/function/Consumer;)V"), require = 0)
+    private void terrarasa$forEachUpdateBatch(Set<ChunkHolder> pending, java.util.function.Consumer<ChunkHolder> action) {
+        List<ChunkHolder> batch;
+        synchronized (pending) {
+            batch = new ArrayList<>(pending);
+            if (this.terrarasa$currentBatch.isEmpty()) {
+                this.terrarasa$currentBatch = batch;
+            }
+        }
+        batch.forEach(action);
+    }
+
+    @Redirect(method = "runAllUpdates", at = @At(value = "INVOKE", target = "Ljava/util/Set;clear()V"), require = 0)
     private void terrarasa$removeProcessedBatch(Set<ChunkHolder> pending) {
         synchronized (pending) {
             // Remove only entries present when the second pass began. Updates created during that pass

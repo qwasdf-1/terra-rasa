@@ -147,12 +147,12 @@ def resolve_game_version_ids(
     # 3. Optional Java version
     if java_version:
         j_norm = str(java_version).strip().lower()
-        java_name = f"java {j_norm}"
-        java_slug = f"java-{j_norm}"
+        j_name = f"java {j_norm}"
+        j_slug = f"java-{j_norm}"
         for v in versions:
             v_name = (v.get("name") or "").strip().lower()
             v_slug = (v.get("slug") or "").strip().lower()
-            if v_name == java_name or v_slug == java_slug:
+            if v_name == j_name or v_slug == j_slug:
                 java_id = v.get("id")
                 if java_id is not None and java_id not in result:
                     result.append(java_id)

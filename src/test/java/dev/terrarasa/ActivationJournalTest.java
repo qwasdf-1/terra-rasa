@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -44,7 +43,7 @@ class ActivationJournalTest {
         this.journal.previousRunLabel = "replaced-by-" + RUN_ID;
         this.journal.phase = ActivationJournal.Phase.PROMOTING;
         for (String target : TARGETS) {
-            Identifier targetId = Identifier.parse("minecraft:" + target);
+            ResourceIdentifier targetId = ResourceIdentifier.parse("minecraft:" + target);
             Path canonical = this.paths.dimension(targetId);
             Path stage = this.paths.dimension(StageKeys.stageId(RUN_ID, targetId));
             write(canonical.resolve("data/marker"), "old");
@@ -181,7 +180,7 @@ class ActivationJournalTest {
         Files.writeString(this.paths.journal(), Json.GSON.toJson(this.journal));
 
         assertThrows(IOException.class, () -> ActivationJournal.load(this.paths));
-        assertEquals("old", read(this.paths.dimension(Identifier.parse("minecraft:overworld")).resolve("data/marker")));
+        assertEquals("old", read(this.paths.dimension(ResourceIdentifier.parse("minecraft:overworld")).resolve("data/marker")));
     }
 
     @Test
@@ -191,7 +190,7 @@ class ActivationJournalTest {
         Files.writeString(this.paths.journal(), Json.GSON.toJson(this.journal));
 
         assertThrows(IOException.class, () -> ActivationJournal.load(this.paths));
-        assertEquals("old", read(this.paths.dimension(Identifier.parse("minecraft:overworld")).resolve("data/marker")));
+        assertEquals("old", read(this.paths.dimension(ResourceIdentifier.parse("minecraft:overworld")).resolve("data/marker")));
     }
 
     @Test

@@ -1,9 +1,5 @@
 package dev.terrarasa;
 
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.server.level.TicketType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,10 +32,7 @@ public final class TerraRasa {
      * constructor runs.
      */
     public static void registerTicketTypes() {
-        Pregenerator.TICKET = Registry.register(BuiltInRegistries.TICKET_TYPE,
-                Identifier.fromNamespaceAndPath(MOD_ID, "pregenerate"), new TicketType(0L, TicketType.FLAG_LOADING));
-        WorldPreparationService.PRELOAD_TICKET = Registry.register(BuiltInRegistries.TICKET_TYPE,
-                Identifier.fromNamespaceAndPath(MOD_ID, "preload"), new TicketType(0L, TicketType.FLAG_LOADING));
+        MinecraftCompat.registerTicketTypes();
     }
 
     /** Records the platform of the loader currently running this mod. Call once, at mod load. */

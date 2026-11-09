@@ -57,7 +57,7 @@ public final class PinnedSeed {
         if (current == null || pinned == null) {
             return null;
         }
-        DimensionClass type = current.classify(dimension.identifier());
+        DimensionClass type = current.classify(MinecraftCompat.dimensionId(dimension));
         return type == DimensionClass.PERSISTENT_SERVICE || type == DimensionClass.EXTERNAL ? pinned : null;
     }
 }

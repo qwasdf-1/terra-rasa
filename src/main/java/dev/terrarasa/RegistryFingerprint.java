@@ -11,7 +11,6 @@ import java.util.Map;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.SharedConstants;
-import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
@@ -37,18 +36,17 @@ public final class RegistryFingerprint {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
-        update(digest, "version=" + SharedConstants.getCurrentVersion().id());
+        update(digest, "version=" + MinecraftCompat.gameVersionId());
         update(digest, "structures=" + MinecraftCompat.generateStructures(server));
         server.getPackRepository().getSelectedIds().stream().sorted().forEach(pack -> update(digest, "pack=" + pack));
 
-        RegistryOps<JsonElement> ops = server.registryAccess().createSerializationContext(JsonOps.INSTANCE);
-        Registry<LevelStem> stems = server.registryAccess().lookupOrThrow(Registries.LEVEL_STEM);
-        List<Map.Entry<ResourceKey<LevelStem>, LevelStem>> entries = stems.entrySet().stream()
-                .filter(entry -> policy.resettable().contains(entry.getKey().identifier()))
-                .sorted(Comparator.comparing(entry -> entry.getKey().identifier().toString()))
+        RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, server.registryAccess());
+        List<Map.Entry<ResourceKey<LevelStem>, LevelStem>> entries = MinecraftCompat.levelStemEntries(server).stream()
+                .filter(entry -> policy.resettable().contains(MinecraftCompat.stemId(entry.getKey())))
+                .sorted(Comparator.comparing(entry -> MinecraftCompat.stemId(entry.getKey()).asString()))
                 .toList();
         for (Map.Entry<ResourceKey<LevelStem>, LevelStem> entry : entries) {
-            update(digest, "stem=" + entry.getKey().identifier());
+            update(digest, "stem=" + MinecraftCompat.stemId(entry.getKey()));
             String encoded = LevelStem.CODEC.encodeStart(ops, entry.getValue())
                     .mapOrElse(JsonElement::toString, error -> "unencodable:" + error.message());
             update(digest, encoded);

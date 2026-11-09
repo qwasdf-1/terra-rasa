@@ -13,7 +13,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.google.gson.JsonParseException;
-import net.minecraft.resources.Identifier;
 
 /**
  * Write-ahead record of one canonical activation.
@@ -145,14 +144,14 @@ public final class ActivationJournal {
                 throw new IOException("Activation journal contains an incomplete dimension move");
             }
             try {
-                Identifier target = Identifier.parse(move.target);
-                if (!target.toString().equals(move.target)) {
+                ResourceIdentifier target = ResourceIdentifier.parse(move.target);
+                if (!target.asString().equals(move.target)) {
                     throw new IllegalArgumentException("non-canonical dimension target");
                 }
-                if (!targets.add(target.toString())) {
+                if (!targets.add(target.asString())) {
                     throw new IllegalArgumentException("duplicate dimension target " + target);
                 }
-                Identifier stageId = StageKeys.stageId(runUuid, target);
+                ResourceIdentifier stageId = StageKeys.stageId(runUuid, target);
                 Path canonical = paths.resolve(move.canonical);
                 Path quarantine = paths.resolve(move.quarantine);
                 Path stage = paths.resolve(move.stage);

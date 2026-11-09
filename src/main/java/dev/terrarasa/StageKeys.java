@@ -3,8 +3,6 @@ package dev.terrarasa;
 import java.util.Optional;
 import java.util.UUID;
 
-import net.minecraft.resources.Identifier;
-
 /**
  * Collision-free identities for staged dimensions.
  *
@@ -19,21 +17,21 @@ public final class StageKeys {
     private StageKeys() {
     }
 
-    public static Identifier stageId(UUID runId, Identifier target) {
-        return Identifier.fromNamespaceAndPath(NAMESPACE,
-                STAGE_PREFIX + runId + "/" + target.getNamespace() + "/" + target.getPath());
+    public static ResourceIdentifier stageId(UUID runId, ResourceIdentifier target) {
+        return ResourceIdentifier.fromNamespaceAndPath(NAMESPACE,
+                STAGE_PREFIX + runId + "/" + target.namespace() + "/" + target.path());
     }
 
-    public static boolean isStage(Identifier id) {
-        return NAMESPACE.equals(id.getNamespace()) && id.getPath().startsWith(STAGE_PREFIX);
+    public static boolean isStage(ResourceIdentifier id) {
+        return NAMESPACE.equals(id.namespace()) && id.path().startsWith(STAGE_PREFIX);
     }
 
     /** Returns the run that owns a staged dimension identifier. */
-    public static Optional<UUID> runOf(Identifier id) {
+    public static Optional<UUID> runOf(ResourceIdentifier id) {
         if (!isStage(id)) {
             return Optional.empty();
         }
-        String rest = id.getPath().substring(STAGE_PREFIX.length());
+        String rest = id.path().substring(STAGE_PREFIX.length());
         int slash = rest.indexOf('/');
         if (slash <= 0) {
             return Optional.empty();

@@ -31,12 +31,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.PlayerSpawnFinder;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
@@ -84,7 +82,7 @@ public final class WorldPreparationService {
     private final WorldPaths paths;
     private final int preloadRadius;
     /** Pregeneration radius in blocks per resettable dimension; missing or 0 means none. */
-    private Map<Identifier, Integer> pregenerationRadii;
+    private Map<ResourceIdentifier, Integer> pregenerationRadii;
     private final Duration timeout;
     private final Duration drainTimeout;
     private final Consumer<ServerPlayer> evacuator;
@@ -120,7 +118,7 @@ public final class WorldPreparationService {
      * @param timeout bounds everything up to the spawn area; pregeneration that is still running at the
      *        timeout stops there instead of failing the preparation.
      */
-    public WorldPreparationService(WorldPaths paths, int preloadRadius, Map<Identifier, Integer> pregenerationRadii,
+    public WorldPreparationService(WorldPaths paths, int preloadRadius, Map<ResourceIdentifier, Integer> pregenerationRadii,
             Duration timeout, Duration drainTimeout, Consumer<ServerPlayer> evacuator) {
         this.paths = paths;
         this.preloadRadius = preloadRadius;
@@ -135,7 +133,7 @@ public final class WorldPreparationService {
     }
 
     /** Updates the radii captured by preparations started after this call. */
-    public void setPregenerationRadii(Map<Identifier, Integer> radii) {
+    public void setPregenerationRadii(Map<ResourceIdentifier, Integer> radii) {
         this.pregenerationRadii = Map.copyOf(radii);
     }
 
@@ -321,7 +319,7 @@ public final class WorldPreparationService {
                     && fingerprint.equals(manifest.get().fingerprint)
                     && sameTargets(manifest.get(), policy)
                     && manifest.get().dimensions.stream().allMatch(d -> Files.isDirectory(
-                            this.paths.dimension(Identifier.parse(d.stage))))
+                            this.paths.dimension(ResourceIdentifier.parse(d.stage))))
                     && this.ready.size() < this.readyLimit;
             if (adoptable) {
                 this.ready.addLast(manifest.get());
@@ -346,8 +344,7 @@ public final class WorldPreparationService {
         if (this.ready.size() >= this.readyLimit) {
             throw new LifecycleException("The prepared run pool is full (" + this.ready.size() + "/" + this.readyLimit + ")");
         }
-        Registry<LevelStem> stems = server.registryAccess().lookupOrThrow(Registries.LEVEL_STEM);
-        List<Identifier> stemIds = stems.keySet().stream().toList();
+        List<ResourceIdentifier> stemIds = MinecraftCompat.stemIds(server);
         List<String> problems = policy.validate(stemIds);
         if (!problems.isEmpty()) {
             throw new LifecycleException("Dimension policy preflight failed: " + String.join("; ", problems));
@@ -355,7 +352,7 @@ public final class WorldPreparationService {
 
         long beginStarted = System.nanoTime();
         UUID runId = UUID.randomUUID();
-        RunManifest manifest = RunManifest.create(runId, seed, SharedConstants.getCurrentVersion().id(),
+        RunManifest manifest = RunManifest.create(runId, seed, MinecraftCompat.gameVersionId(),
                 RegistryFingerprint.compute(server, policy));
         manifest.preloadRadius = preloadRadius;
         Preparation preparation = new Preparation(runId, seed, manifest, preloadRadius, this.pregenerationRadii);
@@ -363,13 +360,13 @@ public final class WorldPreparationService {
         this.lastFailure = null;
         try {
             Map<ResourceKey<Level>, ServerLevel> levels = ((MinecraftServerAccessor) server).terrarasa$levels();
-            for (Identifier target : policy.resettable()) {
-                LevelStem stem = stems.getValue(target);
+            for (ResourceIdentifier target : policy.resettable()) {
+                LevelStem stem = MinecraftCompat.getStem(server, target);
                 if (stem == null) {
                     throw new LifecycleException("No level stem for " + target);
                 }
-                Identifier stageId = StageKeys.stageId(runId, target);
-                ResourceKey<Level> stageKey = ResourceKey.create(Registries.DIMENSION, stageId);
+                ResourceIdentifier stageId = StageKeys.stageId(runId, target);
+                ResourceKey<Level> stageKey = MinecraftCompat.dimensionKey(stageId);
                 if (levels.containsKey(stageKey) || Files.exists(this.paths.dimension(stageId))) {
                     throw new LifecycleException("Staging identity collision for " + stageId);
                 }
@@ -485,7 +482,7 @@ public final class WorldPreparationService {
         if (preparation.spawnSearchCenter == null) {
             // Vanilla performs its climate search off-thread and returns the selected spawn position.
             if (preparation.climateSearch == null) {
-                preparation.climateSearch = PlayerSpawnFinder.findSpawn(overworld, BlockPos.ZERO);
+                preparation.climateSearch = MinecraftCompat.findSpawn(overworld);
             }
             if (!preparation.climateSearch.isDone()) {
                 return;
@@ -529,7 +526,7 @@ public final class WorldPreparationService {
         }
         preparation.manifest.timingsMillis.put("preloading", preparation.phaseElapsedMillis());
         BlockPos spawn = new BlockPos(preparation.manifest.spawn.x, preparation.manifest.spawn.y, preparation.manifest.spawn.z);
-        for (Map.Entry<Identifier, ServerLevel> staged : preparation.levels.entrySet()) {
+        for (Map.Entry<ResourceIdentifier, ServerLevel> staged : preparation.levels.entrySet()) {
             int radius = preparation.pregenerationRadii.getOrDefault(staged.getKey(), 0);
             if (radius > 0) {
                 PregenerationTask task = PregenerationTask.around(staged.getKey(), staged.getValue(), spawn, radius);
@@ -678,7 +675,7 @@ public final class WorldPreparationService {
                 evacuate(level);
                 LevelRetirement.drainSaveAndClose(server, level, this.drainTimeout);
             } catch (LifecycleException | RuntimeException e) {
-                TerraRasa.LOGGER.error("Could not close staged level {}", level.dimension().identifier(), e);
+                TerraRasa.LOGGER.error("Could not close staged level {}", MinecraftCompat.dimensionId(level.dimension()), e);
             }
             levels.remove(level.dimension(), level);
         }
@@ -692,7 +689,7 @@ public final class WorldPreparationService {
             this.evacuator.accept(player);
         }
         if (!level.players().isEmpty()) {
-            throw new LifecycleException("players remain in staged level " + level.dimension().identifier());
+            throw new LifecycleException("players remain in staged level " + MinecraftCompat.dimensionId(level.dimension()));
         }
     }
 
@@ -810,7 +807,7 @@ public final class WorldPreparationService {
     }
 
     private static boolean sameTargets(RunManifest manifest, DimensionPolicy policy) {
-        List<Identifier> targets = manifest.dimensions.stream().map(d -> Identifier.parse(d.target)).toList();
+        List<ResourceIdentifier> targets = manifest.dimensions.stream().map(d -> ResourceIdentifier.parse(d.target)).toList();
         return targets.equals(policy.resettable());
     }
 
@@ -837,8 +834,8 @@ public final class WorldPreparationService {
         final long seed;
         final RunManifest manifest;
         final int preloadRadius;
-        final Map<Identifier, Integer> pregenerationRadii;
-        final Map<Identifier, ServerLevel> levels = new LinkedHashMap<>();
+        final Map<ResourceIdentifier, Integer> pregenerationRadii;
+        final Map<ResourceIdentifier, ServerLevel> levels = new LinkedHashMap<>();
         final StagedChunkTickets chunks = new StagedChunkTickets(PRELOAD_TICKET);
         final List<Pregenerator> pregenerators = new ArrayList<>();
         boolean finishRequested;
@@ -850,7 +847,7 @@ public final class WorldPreparationService {
         private int flushStalledTicks;
         private @Nullable CompletableFuture<Void> ioFlush;
         final ArrayDeque<StagedLevel> toConstruct = new ArrayDeque<>();
-        final Map<Identifier, Integer> constructionTicks = new LinkedHashMap<>();
+        final Map<ResourceIdentifier, Integer> constructionTicks = new LinkedHashMap<>();
         @Nullable Integer lastLevelConstructionTick;
         @Nullable SpawnSpiral spawnSearch;
         @Nullable CompletableFuture<Vec3> climateSearch;
@@ -863,7 +860,7 @@ public final class WorldPreparationService {
         int preloadedChunks;
 
         Preparation(UUID runId, long seed, RunManifest manifest, int preloadRadius,
-                Map<Identifier, Integer> pregenerationRadii) {
+                Map<ResourceIdentifier, Integer> pregenerationRadii) {
             this.runId = runId;
             this.seed = seed;
             this.manifest = manifest;
@@ -890,6 +887,6 @@ public final class WorldPreparationService {
 
     }
 
-    private record StagedLevel(Identifier target, ResourceKey<Level> key, LevelStem stem) {
+    private record StagedLevel(ResourceIdentifier target, ResourceKey<Level> key, LevelStem stem) {
     }
 }

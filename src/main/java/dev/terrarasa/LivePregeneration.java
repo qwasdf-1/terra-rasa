@@ -8,7 +8,6 @@ import java.util.Map;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
@@ -58,7 +57,7 @@ public final class LivePregeneration {
         Iterator<PregenerationTask> tasks = TASKS.iterator();
         while (tasks.hasNext()) {
             PregenerationTask task = tasks.next();
-            ServerLevel level = server.getLevel(CanonicalActivationService.dimensionKey(Identifier.parse(task.dimension)));
+            ServerLevel level = server.getLevel(CanonicalActivationService.dimensionKey(ResourceIdentifier.parse(task.dimension)));
             Pregenerator running = RUNNING.get(task);
             if (running != null && running.level() != level) {
                 // The level was replaced (a swap rolled back and reopened it): continue in the new object.

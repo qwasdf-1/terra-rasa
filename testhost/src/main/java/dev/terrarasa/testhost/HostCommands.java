@@ -13,6 +13,7 @@ import com.mojang.brigadier.context.CommandContext;
 import dev.terrarasa.FaultInjection;
 import dev.terrarasa.Json;
 import dev.terrarasa.LifecycleException;
+import dev.terrarasa.MinecraftCompat;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -30,7 +31,7 @@ final class HostCommands {
 
     static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("terrarasa")
-                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .requires(source -> MinecraftCompat.hasPermission(source, 2))
                 .then(Commands.literal("status").executes(ctx -> json(ctx, () -> TestHost.host().status())))
                 .then(Commands.literal("prepare")
                         .executes(ctx -> prepare(ctx, null, null))
@@ -40,9 +41,15 @@ final class HostCommands {
                                         .executes(ctx -> prepare(ctx, LongArgumentType.getLong(ctx, "seed"),
                                                 IntegerArgumentType.getInteger(ctx, "radius"))))))
                 .then(Commands.literal("activate").executes(ctx -> {
-                    String reply = TestHost.host().requestActivation() ? "activated" : "activation queued";
-                    ctx.getSource().sendSuccess(() -> Component.literal(reply), false);
-                    return 1;
+                    try {
+                        String reply = TestHost.host().requestActivation() ? "activated" : "activation queued";
+                        ctx.getSource().sendSuccess(() -> Component.literal(reply), false);
+                        return 1;
+                    } catch (Throwable t) {
+                        t.printStackTrace();
+                        ctx.getSource().sendFailure(Component.literal("Activation failed: " + t.getMessage()));
+                        return 0;
+                    }
                 }))
                 .then(Commands.literal("gc").executes(ctx -> json(ctx, () -> {
                     // Leak check: retired levels are only meaningfully unreachable after a collection.

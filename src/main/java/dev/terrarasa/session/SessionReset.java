@@ -9,7 +9,6 @@ import dev.terrarasa.mixin.StatsCounterAccessor;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.advancements.AdvancementProgress;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.ServerScoreboard;
 import net.minecraft.server.bossevents.CustomBossEvent;
@@ -18,7 +17,6 @@ import net.minecraft.server.players.PlayerList;
 import net.minecraft.stats.ServerStatsCounter;
 import net.minecraft.stats.Stat;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
-import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.storage.CommandStorage;
 import net.minecraft.world.scores.Objective;
@@ -47,10 +45,7 @@ public final class SessionReset {
             scoreboard.removePlayerTeam(team);
         }
 
-        CommandStorage storage = server.getCommandStorage();
-        for (Identifier id : storage.keys().toList()) {
-            storage.set(id, new CompoundTag());
-        }
+        MinecraftCompat.resetCommandStorage(server);
 
         for (CustomBossEvent event : new ArrayList<>(server.getCustomBossEvents().getEvents())) {
             event.removeAllPlayers();
@@ -73,10 +68,7 @@ public final class SessionReset {
         player.closeContainer();
         player.stopRiding();
         player.ejectPassengers();
-        for (ThrownEnderpearl pearl : new ArrayList<>(player.getEnderPearls())) {
-            pearl.discard();
-        }
-        player.getEnderPearls().clear();
+        MinecraftCompat.clearPlayerEnderPearls(player);
 
         player.getInventory().clearContent();
         player.getEnderChestInventory().clearContent();
@@ -100,7 +92,7 @@ public final class SessionReset {
         for (String tag : List.copyOf(dev.terrarasa.MinecraftCompat.entityTags(player))) {
             player.removeTag(tag);
         }
-        player.setRespawnPosition(null, false);
+        MinecraftCompat.clearPlayerRespawnPosition(player);
         player.setLastDeathLocation(java.util.Optional.empty());
         // A fresh world has never shown its credits: the first exit-portal jump of every run rolls them.
         player.seenCredits = false;

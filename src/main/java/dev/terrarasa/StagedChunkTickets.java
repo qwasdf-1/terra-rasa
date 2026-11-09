@@ -7,13 +7,9 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ChunkLevel;
-import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.Ticket;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.TicketStorage;
 
 /**
  * The chunk tickets a preparation holds in staged levels. Squares of chunks are loaded to full status and
@@ -62,7 +58,7 @@ final class StagedChunkTickets {
         for (int i = 0; i < starts && queued.hasNext(); i++) {
             LoadedChunk chunk = queued.next();
             queued.remove();
-            tickets(chunk.level()).addTicket(fullOnly(), chunk.pos());
+            MinecraftCompat.addFullTicket(chunk.level(), this.type, chunk.pos());
             this.loading.add(chunk);
         }
         reportBudget();
@@ -91,7 +87,7 @@ final class StagedChunkTickets {
                 this.tickets.remove(chunk);
                 this.loading.remove(chunk);
                 if (!this.queuedTickets.remove(chunk)) {
-                    tickets(level).removeTicket(fullOnly(), pos);
+                    MinecraftCompat.removeFullTicket(level, this.type, pos);
                 }
             }
         });
@@ -119,7 +115,7 @@ final class StagedChunkTickets {
         for (int i = 0; i < limit && queued.hasNext(); i++) {
             LoadedChunk chunk = queued.next();
             queued.remove();
-            tickets(chunk.level()).removeTicket(fullOnly(), chunk.pos());
+            MinecraftCompat.removeFullTicket(chunk.level(), this.type, chunk.pos());
         }
     }
 
@@ -130,7 +126,7 @@ final class StagedChunkTickets {
     void releaseAll() {
         for (LoadedChunk chunk : this.tickets.keySet()) {
             if (!this.queuedTickets.contains(chunk)) {
-                tickets(chunk.level()).removeTicket(fullOnly(), chunk.pos());
+                MinecraftCompat.removeFullTicket(chunk.level(), this.type, chunk.pos());
             }
         }
         this.tickets.clear();
@@ -146,17 +142,6 @@ final class StagedChunkTickets {
                 action.accept(new ChunkPos(x, z));
             }
         }
-    }
-
-    /** The level's live ticket storage (cached saved data, the instance its chunk cache uses). */
-    private static TicketStorage tickets(ServerLevel level) {
-        return level.getChunkSource().getDataStorage().computeIfAbsent(TicketStorage.TYPE);
-    }
-
-    /** Exactly FULL: the chunk is generated and loaded but never block- or entity-ticks. Vanilla matches
-     *  tickets by type and level, so a fresh instance removes the one that was added. */
-    private Ticket fullOnly() {
-        return new Ticket(this.type, ChunkLevel.byStatus(FullChunkStatus.FULL));
     }
 
     private record LoadedChunk(ServerLevel level, ChunkPos pos) {

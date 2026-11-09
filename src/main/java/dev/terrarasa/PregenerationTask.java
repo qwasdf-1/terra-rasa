@@ -1,7 +1,6 @@
 package dev.terrarasa;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
@@ -33,15 +32,15 @@ public final class PregenerationTask {
      * The area a run needs in {@code target}: around the run spawn, scaled into the dimension's coordinates
      * (the Nether's 1:8), or around the origin for the End, whose main island and fight are fixed there.
      */
-    static PregenerationTask around(Identifier target, ServerLevel level, BlockPos spawn, int radiusBlocks) {
+    static PregenerationTask around(ResourceIdentifier target, ServerLevel level, BlockPos spawn, int radiusBlocks) {
         int centerX = 0;
         int centerZ = 0;
-        if (!target.equals(Level.END.identifier()) && level.getDragonFight() == null) {
+        if (!target.equals(MinecraftCompat.dimensionId(Level.END)) && level.getDragonFight() == null) {
             double scale = level.dimensionType().coordinateScale();
             centerX = ((int) Math.floor(spawn.getX() / scale)) >> 4;
             centerZ = ((int) Math.floor(spawn.getZ() / scale)) >> 4;
         }
-        return new PregenerationTask(target.toString(), centerX, centerZ, (radiusBlocks + 15) >> 4, 0);
+        return new PregenerationTask(target.asString(), centerX, centerZ, (radiusBlocks + 15) >> 4, 0);
     }
 
     int total() {
@@ -53,8 +52,8 @@ public final class PregenerationTask {
         if (this.dimension == null) {
             throw new IllegalArgumentException("pregeneration dimension is missing");
         }
-        Identifier id = Identifier.parse(this.dimension);
-        if (!id.toString().equals(this.dimension) || StageKeys.isStage(id)) {
+        ResourceIdentifier id = ResourceIdentifier.parse(this.dimension);
+        if (!id.asString().equals(this.dimension) || StageKeys.isStage(id)) {
             throw new IllegalArgumentException("invalid pregeneration dimension " + this.dimension);
         }
         if (this.centerChunkX < -1_875_000 || this.centerChunkX > 1_875_000

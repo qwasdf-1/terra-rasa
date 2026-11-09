@@ -8,7 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 
-import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -58,7 +57,7 @@ class RunManifestTest {
 
     private static RunManifest validManifest() {
         RunManifest manifest = RunManifest.create(RUN_ID, 7L, "26.2", "fingerprint");
-        Identifier overworld = Identifier.withDefaultNamespace("overworld");
+        ResourceIdentifier overworld = ResourceIdentifier.withDefaultNamespace("overworld");
         manifest.dimensions.add(new RunManifest.Dimension(overworld.toString(), StageKeys.stageId(RUN_ID, overworld).toString()));
         manifest.state = PreparationState.CLOSED_READY;
         manifest.spawn = new RunManifest.Spawn(0, 80, 0);

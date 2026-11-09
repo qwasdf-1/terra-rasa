@@ -13,8 +13,8 @@ import dev.terrarasa.CanonicalLevelEvents;
 import dev.terrarasa.DimensionPolicy;
 import dev.terrarasa.Json;
 import dev.terrarasa.PinnedSeed;
+import dev.terrarasa.ResourceIdentifier;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import org.jspecify.annotations.Nullable;
 
@@ -28,7 +28,7 @@ import org.jspecify.annotations.Nullable;
  */
 public final class TestHost {
     /** Where players wait while the canonical worlds are replaced; never reset. */
-    static final Identifier HOLDING = Identifier.fromNamespaceAndPath("terrarasa_testhost", "holding");
+    static final ResourceIdentifier HOLDING = ResourceIdentifier.fromNamespaceAndPath("terrarasa_testhost", "holding");
 
     private static @Nullable Host host;
 
@@ -86,14 +86,14 @@ public final class TestHost {
             }
         }
 
-        Map<Identifier, Integer> pregenerationRadii() {
-            Map<Identifier, Integer> radii = new LinkedHashMap<>();
-            this.pregeneration.forEach((dimension, radius) -> radii.put(Identifier.parse(dimension), radius));
+        Map<ResourceIdentifier, Integer> pregenerationRadii() {
+            Map<ResourceIdentifier, Integer> radii = new LinkedHashMap<>();
+            this.pregeneration.forEach((dimension, radius) -> radii.put(ResourceIdentifier.parse(dimension), radius));
             return radii;
         }
 
         DimensionPolicy policy() {
-            return new DimensionPolicy(this.resettableDimensions.stream().map(Identifier::parse).toList(), Set.of(HOLDING));
+            return new DimensionPolicy(this.resettableDimensions.stream().map(ResourceIdentifier::parse).toList(), Set.of(HOLDING));
         }
     }
 }

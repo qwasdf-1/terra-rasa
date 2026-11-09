@@ -1,0 +1,24 @@
+{
+  "required": true,
+  "package": "dev.terrarasa.mixin",
+  "mixins": [
+    "C2meDfcGraphDumpMixin",
+    "ChunkMapAccessor",
+    "DistanceManagerMixin",
+    "EntityStorageAccessor",
+    "MinecraftServerAccessor",
+    "MinecraftServerMixin",
+    "PersistentEntitySectionManagerAccessor",
+    "PoiManagerMixin",
+    "SectionStorageAccessor",
+    "ServerFunctionManagerAccessor",
+    "ServerLevelAccessor",
+    "ServerLevelMixin",
+    "StatsCounterAccessor",
+    "StructureTemplatePaletteMixin",
+    "PrimaryLevelDataAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

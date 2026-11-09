@@ -1,0 +1,7 @@
+{
+  "extra_rules": [
+    "/docs/archive/",
+    "/docs/local/",
+    "/docs/design/"
+  ]
+}

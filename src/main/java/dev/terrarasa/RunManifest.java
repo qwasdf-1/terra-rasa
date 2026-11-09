@@ -13,7 +13,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.google.gson.JsonParseException;
-import net.minecraft.resources.Identifier;
 
 /**
  * Durable descriptor of one prepared run. A run is adoptable only once its manifest
@@ -100,9 +99,9 @@ public final class RunManifest {
             if (dimension == null || dimension.target == null || dimension.stage == null) {
                 throw new IOException("Incomplete dimension entry in manifest " + file);
             }
-            Identifier target = parseIdentifier(dimension.target, file);
-            Identifier stage = parseIdentifier(dimension.stage, file);
-            if (!target.toString().equals(dimension.target) || !stage.toString().equals(dimension.stage)
+            ResourceIdentifier target = parseIdentifier(dimension.target, file);
+            ResourceIdentifier stage = parseIdentifier(dimension.stage, file);
+            if (!target.asString().equals(dimension.target) || !stage.asString().equals(dimension.stage)
                     || !stage.equals(StageKeys.stageId(parsedRunId, target))) {
                 throw new IOException("Invalid staged dimension mapping in manifest " + file);
             }
@@ -141,9 +140,9 @@ public final class RunManifest {
         }
     }
 
-    private static Identifier parseIdentifier(String value, Path file) throws IOException {
+    private static ResourceIdentifier parseIdentifier(String value, Path file) throws IOException {
         try {
-            return Identifier.parse(value);
+            return ResourceIdentifier.parse(value);
         } catch (IllegalArgumentException e) {
             throw new IOException("Invalid dimension identifier in manifest " + file, e);
         }

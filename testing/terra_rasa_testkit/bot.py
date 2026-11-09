@@ -250,6 +250,8 @@ class Bot:
         self._send("login", "login_acknowledged", b"")
         self._update(lambda s: setattr(s, "phase", "configuration"))
 
+    _login_game_profile = _login_login_finished
+
     def _login_login_disconnect(self, reader: Reader) -> None:
         self._update(lambda s: setattr(s, "disconnect_reason", reader.string()))
 
@@ -311,14 +313,16 @@ class Bot:
         dimension = self._read_spawn_info(reader)
         self._enter_dimension(dimension, "login")
         self._update(lambda s: setattr(s, "play_entered", s.play_entered + 1))
-        self._send("play", "player_loaded", b"")
+        if ("play", "serverbound", "player_loaded") in self._ids._by_name:
+            self._send("play", "player_loaded", b"")
 
     def _play_respawn(self, reader: Reader) -> None:
         self._update(lambda s: s.effects.clear())
         dimension = self._read_spawn_info(reader)
         self._enter_dimension(dimension, "respawn")
         self._update(lambda s: setattr(s, "respawns", s.respawns + 1))
-        self._send("play", "player_loaded", b"")
+        if ("play", "serverbound", "player_loaded") in self._ids._by_name:
+            self._send("play", "player_loaded", b"")
 
     def _enter_dimension(self, dimension: str, via: str) -> None:
         def change(state: BotState) -> None:

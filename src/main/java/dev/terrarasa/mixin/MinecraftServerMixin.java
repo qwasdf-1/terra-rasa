@@ -28,7 +28,7 @@ abstract class MinecraftServerMixin {
      * {@link WorldPreparationService#keepsServerAwake} and {@link LivePregeneration#keepsServerAwake}).
      */
     @WrapOperation(method = "tickServer", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/server/players/PlayerList;getPlayerCount()I"))
+            target = "Lnet/minecraft/server/players/PlayerList;getPlayerCount()I"), require = 0)
     private int terrarasa$stayAwakeWhilePreparing(PlayerList players, Operation<Integer> original) {
         int count = original.call(players);
         boolean working = WorldPreparationService.keepsServerAwake() || LivePregeneration.keepsServerAwake();

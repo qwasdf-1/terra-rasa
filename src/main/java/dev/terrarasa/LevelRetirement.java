@@ -21,20 +21,20 @@ public final class LevelRetirement {
     public static void drainSaveAndClose(MinecraftServer server, ServerLevel level, Duration timeout) throws LifecycleException {
         assertServerThread(server);
         if (!level.players().isEmpty()) {
-            throw new LifecycleException("Refusing to retire " + level.dimension().identifier() + " with players inside");
+            throw new LifecycleException("Refusing to retire " + MinecraftCompat.dimensionId(level.dimension()) + " with players inside");
         }
         MinecraftCompat.levelUnloaded(server, level);
         level.noSave = false;
         ServerChunkCache chunkSource = level.getChunkSource();
         long deadline = System.nanoTime() + timeout.toNanos();
         while (chunkSource.chunkMap.hasWork()) {
-            chunkSource.deactivateTicketsOnClosing();
+            MinecraftCompat.deactivateTicketsOnClosing(chunkSource);
             chunkSource.tick(() -> true, false);
             for (int i = 0; i < 4096 && chunkSource.pollTask(); i++) {
                 // Run chunk main-thread tasks scheduled by worldgen/IO completions.
             }
             if (System.nanoTime() > deadline) {
-                throw new LifecycleException("Timed out draining chunk work for " + level.dimension().identifier());
+                throw new LifecycleException("Timed out draining chunk work for " + MinecraftCompat.dimensionId(level.dimension()));
             }
             LockSupport.parkNanos(1_000_000L);
         }
@@ -42,7 +42,7 @@ public final class LevelRetirement {
             level.save(null, true, false);
             level.close();
         } catch (IOException | RuntimeException e) {
-            throw new CloseFailedException("Failed to save/close " + level.dimension().identifier(), e);
+            throw new CloseFailedException("Failed to save/close " + MinecraftCompat.dimensionId(level.dimension()), e);
         } finally {
             // POI updates the drain queued as server tasks run after this; they must not touch closed IO.
             ((ClosedPoi) level.getPoiManager()).terrarasa$markClosed();

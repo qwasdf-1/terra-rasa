@@ -11,14 +11,10 @@ import java.util.Map;
 
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ChunkLevel;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.Ticket;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.TicketStorage;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.jspecify.annotations.Nullable;
 
@@ -79,26 +75,23 @@ final class Pregenerator {
 
     /** Releases finished chunks and starts new ones within the shared budget. */
     void tick(MinecraftServer server) {
-        var chunkMap = this.level.getChunkSource().chunkMap;
         Iterator<ChunkPos> generating = this.loading.keySet().iterator();
         while (generating.hasNext()) {
             ChunkPos pos = generating.next();
-            ChunkStatus reached = chunkMap.getLatestStatus(MinecraftCompat.packChunkPos(
-                    MinecraftCompat.chunkX(pos), MinecraftCompat.chunkZ(pos)));
-            if (reached != null && reached.isOrAfter(TARGET)) {
+            if (MinecraftCompat.isChunkStatusReached(this.level, pos, TARGET)) {
                 this.finished.computeIfAbsent(tile(pos), key -> new ArrayList<>()).add(pos);
                 generating.remove();
             }
         }
         releaseFinishedTiles();
         for (int i = 0; i < RELEASES_PER_TICK && !this.releasing.isEmpty(); i++) {
-            tickets().removeTicket(ticket(), this.releasing.poll());
+            MinecraftCompat.removeRegionTicket(this.level, TICKET, this.releasing.poll(), 0);
         }
         int starts = Math.min(STARTS_PER_TICK, GenerationBudget.available(server, this, true));
         int total = this.order.length / 2;
         for (int i = 0; i < starts && this.next < total; i++) {
             ChunkPos pos = position(this.next);
-            tickets().addTicket(ticket(), pos);
+            MinecraftCompat.addRegionTicket(this.level, TICKET, pos, 0);
             this.loading.put(pos, this.next);
             this.next++;
         }
@@ -144,10 +137,10 @@ final class Pregenerator {
     /** Stops: releases every ticket. Chunks part-way through are saved as they are and finished later. */
     void release() {
         for (ChunkPos pos : this.loading.keySet()) {
-            tickets().removeTicket(ticket(), pos);
+            MinecraftCompat.removeRegionTicket(this.level, TICKET, pos, 0);
         }
-        this.finished.values().forEach(tile -> tile.forEach(pos -> tickets().removeTicket(ticket(), pos)));
-        this.releasing.forEach(pos -> tickets().removeTicket(ticket(), pos));
+        this.finished.values().forEach(tile -> tile.forEach(pos -> MinecraftCompat.removeRegionTicket(this.level, TICKET, pos, 0)));
+        this.releasing.forEach(pos -> MinecraftCompat.removeRegionTicket(this.level, TICKET, pos, 0));
         this.loading.clear();
         this.finished.clear();
         this.releasing.clear();
@@ -160,15 +153,6 @@ final class Pregenerator {
         this.finished.clear();
         this.releasing.clear();
         GenerationBudget.report(this, 0);
-    }
-
-    private TicketStorage tickets() {
-        return this.level.getChunkSource().getDataStorage().computeIfAbsent(TicketStorage.TYPE);
-    }
-
-    /** Vanilla matches tickets by type and level, so a fresh instance removes the one that was added. */
-    private static Ticket ticket() {
-        return new Ticket(TICKET, ChunkLevel.byStatus(TARGET));
     }
 
     /**

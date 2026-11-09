@@ -22,14 +22,22 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 @Mod(TerraRasa.MOD_ID)
 public final class TerraRasaNeoForge {
     public TerraRasaNeoForge(IEventBus modEventBus) {
-        // The built-in registries are already frozen when a mod constructor runs, so the ticket
-        // types register on the mod bus's registry event instead: that fires while vanilla still
-        // accepts additions to them.
-        modEventBus.addListener(RegisterEvent.class, event -> {
-            if (event.getRegistryKey() == Registries.TICKET_TYPE) {
-                TerraRasa.registerTicketTypes();
-            }
-        });
+        // The built-in registries are already frozen when a mod constructor runs in 1.21.11+, so the ticket
+        // types register on the mod bus's registry event instead. In 1.21.1/1.21.4, TicketType is not a
+        // registry item and is registered directly.
+        try {
+            var field = Registries.class.getField("TICKET_TYPE");
+            Object ticketTypeKey = field.get(null);
+            modEventBus.addListener(RegisterEvent.class, event -> {
+                if (event.getRegistryKey() == ticketTypeKey) {
+                    TerraRasa.registerTicketTypes();
+                }
+            });
+        } catch (NoSuchFieldException e) {
+            TerraRasa.registerTicketTypes();
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException("Could not read Registries.TICKET_TYPE", e);
+        }
         TerraRasaRuntime.register(new NeoForgePlatform());
     }
 

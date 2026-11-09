@@ -1,7 +1,6 @@
 package dev.terrarasa;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.PlayerSpawnFinder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
@@ -28,7 +27,7 @@ final class SpawnSpiral {
         this.level = level;
         this.center = center;
         int height = level.getChunkSource().getGenerator().getSpawnHeight(level);
-        if (height < level.getMinY()) {
+        if (height < MinecraftCompat.getMinY(level)) {
             BlockPos worldPosition = center.getWorldPosition();
             height = level.getHeight(Heightmap.Types.WORLD_SURFACE, worldPosition.getX() + 8, worldPosition.getZ() + 8);
         }
@@ -42,7 +41,7 @@ final class SpawnSpiral {
                 return this.fallback;
             }
             if (this.x >= -5 && this.x <= 5 && this.z >= -5 && this.z <= 5) {
-                BlockPos candidate = PlayerSpawnFinder.getSpawnPosInChunk(this.level,
+                BlockPos candidate = MinecraftCompat.getSpawnPosInChunk(this.level,
                         new ChunkPos(MinecraftCompat.chunkX(this.center) + this.x, MinecraftCompat.chunkZ(this.center) + this.z));
                 if (candidate != null) {
                     return candidate;

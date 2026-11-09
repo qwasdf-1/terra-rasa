@@ -19,8 +19,8 @@ import dev.terrarasa.RunManifest;
 import dev.terrarasa.WorldPaths;
 import dev.terrarasa.WorldPreparationService;
 import dev.terrarasa.session.SessionReset;
+import dev.terrarasa.ResourceIdentifier;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -28,7 +28,6 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.RandomSupport;
-import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
@@ -50,7 +49,7 @@ final class Host {
     private int attempts;
     private JsonObject lastActivation = new JsonObject();
 
-    Host(MinecraftServer server, DimensionPolicy policy, int preloadRadius, Map<Identifier, Integer> pregenerationRadii,
+    Host(MinecraftServer server, DimensionPolicy policy, int preloadRadius, Map<ResourceIdentifier, Integer> pregenerationRadii,
             Duration preparationTimeout) {
         this.server = server;
         this.policy = policy;
@@ -67,7 +66,7 @@ final class Host {
             return;
         }
         for (ServerLevel level : retiring) {
-            level.setBlock(new BlockPos(0, level.getMinY() + 1, 0), Blocks.BELL.defaultBlockState(), Block.UPDATE_ALL);
+            level.setBlock(new BlockPos(0, MinecraftCompat.getMinY(level) + 1, 0), Blocks.BELL.defaultBlockState(), Block.UPDATE_ALL);
         }
     }
 
@@ -138,7 +137,7 @@ final class Host {
                 SessionReset.resetPlayer(this.server, player, GameType.SURVIVAL);
                 // Vanilla's placement for a new player: a collision-free spot near the world spawn.
                 Vec3 arrival = Vec3.atBottomCenterOf(player.adjustSpawnLocation(overworld, activated.spawn()));
-                player.teleport(new TeleportTransition(overworld, arrival, Vec3.ZERO, 0.0F, 0.0F, TeleportTransition.DO_NOTHING));
+                MinecraftCompat.teleport(player, overworld, arrival, 0.0F, 0.0F);
             }
             result.addProperty("ok", true);
             result.addProperty("runId", activated.runId().toString());
@@ -162,7 +161,7 @@ final class Host {
     private void hold(ServerPlayer player) {
         ServerLevel holding = this.server.getLevel(CanonicalActivationService.dimensionKey(TestHost.HOLDING));
         if (holding != null && player.level() != holding) {
-            player.teleport(new TeleportTransition(holding, HOLDING_SPOT, Vec3.ZERO, 0.0F, 0.0F, TeleportTransition.DO_NOTHING));
+            MinecraftCompat.teleport(player, holding, HOLDING_SPOT, 0.0F, 0.0F);
         }
     }
 
@@ -201,12 +200,12 @@ final class Host {
 
     static JsonObject describePlayer(ServerPlayer player) {
         JsonObject json = new JsonObject();
-        json.addProperty("name", player.getGameProfile().name());
-        json.addProperty("dimension", player.level().dimension().identifier().toString());
+        json.addProperty("name", MinecraftCompat.playerName(player));
+        json.addProperty("dimension", MinecraftCompat.dimensionId(player.level().dimension()).asString());
         json.addProperty("x", player.getX());
         json.addProperty("y", player.getY());
         json.addProperty("z", player.getZ());
-        json.addProperty("gameMode", player.gameMode().getName());
+        json.addProperty("gameMode", MinecraftCompat.playerGameModeName(player));
         json.addProperty("health", player.getHealth());
         return json;
     }

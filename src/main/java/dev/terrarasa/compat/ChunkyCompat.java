@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 
 import dev.terrarasa.CanonicalLevelEvents;
 import dev.terrarasa.LifecycleException;
+import dev.terrarasa.MinecraftCompat;
 import dev.terrarasa.TerraRasa;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -74,7 +75,7 @@ public final class ChunkyCompat {
     }
 
     private static Set<String> names(List<ServerLevel> levels) {
-        return levels.stream().map(level -> level.dimension().identifier().toString()).collect(Collectors.toSet());
+        return levels.stream().map(level -> MinecraftCompat.dimensionId(level.dimension()).asString()).collect(Collectors.toSet());
     }
 
     private static Object call(Object target, String method, Object... arguments) throws ReflectiveOperationException {
