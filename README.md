@@ -112,7 +112,7 @@ The [test host](testhost/src/main/java/dev/terrarasa/testhost/Host.java) is a co
 ./gradlew integrationTest  # real dedicated server; requires uv and Python 3.14
 ```
 
-The integration suite exercises world swaps, recovery, player continuity, seed handling, and pregeneration on a real Fabric server; the NeoForge server install path is still being added. The test host and Python server test kit are included in this repository.
+The integration suite exercises world swaps, recovery, player continuity, seed handling, and pregeneration on a real Fabric server; the NeoForge server install path is still being added. The test host is included in this repository; the Python server test kit (`mc-testkit`) comes from the maintainers' private `mc-tooling` repository, checked out next to this one at `../mc-tooling`, so the integration suite currently runs only for maintainers.
 
 ## Documentation
 

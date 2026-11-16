@@ -94,9 +94,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    # The suite imports mc-testkit from a sibling ../mc-tooling checkout, so both repositories are
+    # checked out side by side, as in the local mc-mods workspace.
+    defaults:
+      run:
+        working-directory: terra-rasa
     steps:
       - uses: actions/checkout@v7
         if: matrix.loader == 'fabric' || matrix.integration == true
+        with:
+          path: terra-rasa
+
+      - name: Check out the pinned private mc-tooling repository
+        if: matrix.loader == 'fabric' || matrix.integration == true
+        uses: actions/checkout@v7
+        with:
+          repository: qwasdf-1/mc-tooling
+          ref: 080c59d4e924840cc9a34288597dc78e74076e2a
+          path: mc-tooling
+          persist-credentials: false
+          # Cross-repository private access requires a read-only token.
+          token: ${{ secrets.MC_TOOLING_READ_TOKEN }}
 
       - name: Install the Gradle JVM
         if: matrix.loader == 'fabric' || matrix.integration == true

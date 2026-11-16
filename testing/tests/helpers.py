@@ -6,8 +6,8 @@ import math
 import time
 from typing import Any
 
-from terra_rasa_testkit.bot import Bot
-from terra_rasa_testkit.server import ServerProcess
+from mc_testkit.bot import Bot
+from mc_testkit.server import ServerProcess
 
 OVERWORLD = "minecraft:overworld"
 NETHER = "minecraft:the_nether"

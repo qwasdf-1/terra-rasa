@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- The integration suite now imports the shared `mc-testkit` from the private `mc-tooling` repository, checked out at `../mc-tooling`, instead of the test kit bundled in `testing/`, which is removed.
+
 ## 0.5.0
 
 ### Added

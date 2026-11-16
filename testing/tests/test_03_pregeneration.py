@@ -15,7 +15,7 @@ import time
 import pytest
 
 from helpers import END, NETHER, OVERWORLD, make_server, request_activation, wait_true
-from terra_rasa_testkit.anvil import chunk_statuses
+from mc_testkit.anvil import chunk_statuses
 
 HOST_CONFIG = {"preloadRadius": 2,
                "pregeneration": {OVERWORLD: 160, NETHER: 48, END: 64}}

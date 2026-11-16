@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from helpers import make_server
-from terra_rasa_testkit.server import environment
+from mc_testkit.server import environment
 
 
 @pytest.fixture(scope="session")

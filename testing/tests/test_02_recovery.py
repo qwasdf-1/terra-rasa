@@ -12,7 +12,7 @@ import json
 import pytest
 
 from helpers import OVERWORLD, RESETTABLE, activate, levels, request_activation
-from terra_rasa_testkit.rcon import RconError
+from mc_testkit.rcon import RconError
 
 #: FaultInjection.HALT_STATUS
 HALT_STATUS = 86

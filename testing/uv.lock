@@ -21,6 +21,17 @@ wheels = [
 ]
 
 [[package]]
+name = "mc-testkit"
+version = "0.1.0"
+source = { editable = "../../mc-tooling/mc-testkit" }
+dependencies = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pytest", specifier = ">=8.3" }]
+
+[[package]]
 name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
@@ -64,12 +75,16 @@ wheels = [
 ]
 
 [[package]]
-name = "terra-rasa-testkit"
+name = "terra-rasa-testing"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
+    { name = "mc-testkit" },
     { name = "pytest" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pytest", specifier = ">=8.3" }]
+requires-dist = [
+    { name = "mc-testkit", editable = "../../mc-tooling/mc-testkit" },
+    { name = "pytest", specifier = ">=8.3" },
+]

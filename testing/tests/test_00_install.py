@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from terra_rasa_testkit.server import (
+from mc_testkit.server import (
     FABRIC,
     NEOFORGE,
     NEOFORGE_RUN_SCRIPTS,
