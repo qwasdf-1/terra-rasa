@@ -17,7 +17,9 @@ CI runs `./gradlew build` on every push and pull request; the integration suite 
 ## Repository Checks
 
 Run `sh scripts/install-git-hooks.sh` once per checkout to enable the local
-pre-commit check. The hook checks the staged tree. Run
+hooks. The pre-commit hook checks the staged tree. The commit-msg hook rejects
+tool-generated co-author trailers and footers, so commits carry their human
+author only. Run
 `python3 scripts/check_doc_boundary.py` to audit the working copy, including
 non-ignored untracked documents.
 
