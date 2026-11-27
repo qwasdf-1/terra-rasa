@@ -1,0 +1,34 @@
+name: Repair CurseForge environment tags
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Apply metadata updates (unchecked previews only)
+        type: boolean
+        default: false
+      file_ids:
+        description: Optional comma-separated file IDs for a pilot; blank scans all visible runtime jars
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: curseforge-environment-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Preview or repair existing CurseForge file tags
+        env:
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          APPLY: ${{ inputs.apply }}
+          FILE_IDS: ${{ inputs.file_ids }}
+        run: python3 .github/scripts/repair_curseforge_environment.py
