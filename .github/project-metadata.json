@@ -1,0 +1,10 @@
+{
+  "curseforge_id": 1774360,
+  "summary": "A server-side Fabric and NeoForge library for seamless world replacement under canonical dimension keys.",
+  "intro": true,
+  "sections": [
+    "## What the library provides"
+  ],
+  "install": "Install the matching JAR on the dedicated server or integrated single-player/LAN host. Fabric requires Fabric API. Terra Rasa is a library for host mods, not a standalone gameplay mode; remote players do not need the mod installed.",
+  "wiki": "docs/host-integration.md"
+}

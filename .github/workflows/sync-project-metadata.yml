@@ -1,0 +1,57 @@
+name: Sync marketplace project metadata
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Marketplace to update (preview always renders both)
+        type: choice
+        options: [both, modrinth, curseforge]
+        default: both
+      apply:
+        description: Apply selected changes (unchecked previews only)
+        type: boolean
+        default: false
+      curseforge_experimental:
+        description: Opt in to undocumented CurseForge description endpoint only
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marketplace-project-metadata
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate marketplace metadata
+        id: render
+        run: python3 .github/scripts/sync_project_metadata.py render
+      - uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-metadata
+          path: marketplace-metadata/
+          if-no-files-found: error
+      - name: Update and verify Modrinth project
+        if: inputs.apply && (inputs.platform == 'both' || inputs.platform == 'modrinth')
+        env:
+          APPLY: ${{ inputs.apply }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+          MODRINTH_PROJECT_SLUG: ${{ vars.MODRINTH_PROJECT_SLUG }}
+          MODRINTH_PROJECT_URL: ${{ vars.MODRINTH_PROJECT_URL }}
+        run: python3 .github/scripts/sync_project_metadata.py modrinth
+      - name: CurseForge project description (experimental or manual)
+        if: "!cancelled() && steps.render.outcome == 'success' && inputs.apply && (inputs.platform == 'both' || inputs.platform == 'curseforge')"
+        env:
+          APPLY: ${{ inputs.apply }}
+          CURSEFORGE_EXPERIMENTAL: ${{ inputs.curseforge_experimental }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+        run: python3 .github/scripts/sync_project_metadata.py curseforge

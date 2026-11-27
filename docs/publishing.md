@@ -54,3 +54,32 @@ Dependencies are configured in file metadata:
 ### Checks and failures
 
 Publishing stops if the tag does not match `mod_version`, an expected target jar or SHA-256 checksum is missing, checksum verification fails, the attached jars do not match the Minecraft and loader targets in the tagged `gradle/minecraft-targets.json`, the CurseForge token is invalid or unauthorized for the project, or the CurseForge upload API rejects an upload. Retrying an upload safely skips target jars that were already uploaded to CurseForge.
+
+## Project-page metadata synchronization
+
+Run **Sync marketplace project metadata** from Actions on `main`.
+The default preview renders a `marketplace-metadata` artifact with the
+summary, curated README sections, detected SPDX license, and source,
+issue and applicable documentation links for both marketplaces.
+Edit `.github/project-metadata.json` to choose the README sections and
+short summary/installation copy; relative Markdown links become absolute
+GitHub links. The script fails closed if the LICENSE text changes from the
+recognized repository license.
+
+For Modrinth, the existing `MODRINTH_TOKEN` additionally needs
+`PROJECT_WRITE` permission (retain existing read and version-create
+permissions). After preview, enable `apply` and choose `modrinth` or
+`both`. The workflow validates the configured project source URL, patches
+only differing supported fields, and reads back the result.
+
+For CurseForge, the official upload API does not document project-page
+metadata editing. Use the generated Markdown and fields in the author
+dashboard for summary, license and links. An optional
+`curseforge_experimental` checkbox attempts only the community-reported
+description endpoint with the existing author token; this is unverified
+and requires manual readback. No Core API key or browser cookie is needed.
+Do not enable it without reviewing the preview. An endpoint failure does
+not affect release publishing.
+
+Project title, slug, categories, galleries, visibility, ownership and
+release/file metadata are intentionally outside this workflow.
