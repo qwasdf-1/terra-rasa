@@ -96,7 +96,6 @@ jobs:
           CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
           CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
           CURSEFORGE_GAME_VERSIONS: ${{ vars.CURSEFORGE_GAME_VERSIONS }}
-          CURSEFORGE_ENVIRONMENT: ${{ vars.CURSEFORGE_ENVIRONMENT }}
           TARGETS_JSON: ${{ needs.release.outputs.matrix }}
           CURSEFORGE_USER_AGENT: qwasdf-1/terra-rasa-github-publisher
         run: |
