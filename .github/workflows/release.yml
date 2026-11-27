@@ -48,19 +48,19 @@ jobs:
           case "${{ matrix.loader }}" in
             fabric)
               args=(
-                -Ploader=${{ matrix.loader }}
-                -Ploom_version=${{ matrix.loom_version }}
-                -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
-                -Pfabric_api_version=${{ matrix.fabric_api_version }}
-                -Pfabric_api_range=${{ matrix.fabric_api_range }}
+                "-Ploader=${{ matrix.loader }}"
+                "-Ploom_version=${{ matrix.loom_version }}"
+                "-Pfabric_loader_version=${{ matrix.fabric_loader_version }}"
+                "-Pfabric_api_version=${{ matrix.fabric_api_version }}"
+                "-Pfabric_api_range=${{ matrix.fabric_api_range }}"
               )
               ;;
             neoforge)
               args=(
-                -Ploader=${{ matrix.loader }}
-                -Pmoddev_version=${{ matrix.moddev_version }}
-                -Pneoforge_version=${{ matrix.neoforge_version }}
-                -Ploader_range=${{ matrix.loader_range }}
+                "-Ploader=${{ matrix.loader }}"
+                "-Pmoddev_version=${{ matrix.moddev_version }}"
+                "-Pneoforge_version=${{ matrix.neoforge_version }}"
+                "-Ploader_range=${{ matrix.loader_range }}"
               )
               ;;
             *)
@@ -69,10 +69,10 @@ jobs:
               ;;
           esac
           ./gradlew clean build "${args[@]}" \
-            -Pminecraft_version=${{ matrix.build_minecraft_version }} \
-            -Ptarget_label=${{ matrix.target_label }} \
-            -Pminecraft_range="${{ matrix.minecraft_range }}" \
-            -Pjava_version=${{ matrix.java_version }}
+            "-Pminecraft_version=${{ matrix.build_minecraft_version }}" \
+            "-Ptarget_label=${{ matrix.target_label }}" \
+            "-Pminecraft_range=${{ matrix.minecraft_range }}" \
+            "-Pjava_version=${{ matrix.java_version }}"
 
       - name: Stage runtime jar
         env:
