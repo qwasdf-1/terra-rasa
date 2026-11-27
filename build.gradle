@@ -27,13 +27,14 @@ ext.modArchiveName = 'terra-rasa'
 apply from: rootProject.file('gradle/mod-conventions.gradle')
 apply from: rootProject.file('gradle/integration-server.gradle')
 
-// Published as a Minecraft-specific artifact; hosts depend on it and usually bundle it with `include`.
-// The loader tag keeps Fabric and NeoForge artifacts of the same game version apart.
+// Published as a target-specific artifact; hosts depend on it and usually bundle it with `include`.
+// The loader tag keeps Fabric and NeoForge artifacts of the same target apart.
 def loaderTag = neoforgeLoader ? '-neoforge' : ''
+def targetLabel = (project.findProperty('target_label') ?: "mc${minecraft_version}").toString()
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId = "terra-rasa-mc${minecraft_version}${loaderTag}"
+            artifactId = "terra-rasa-${targetLabel}${loaderTag}"
             from components.java
             pom {
                 name = 'Terra Rasa'

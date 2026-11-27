@@ -14,14 +14,14 @@ description="Prepares and swaps freshly seeded canonical dimensions on dedicated
 [[dependencies.terrarasa]]
 modId="neoforge"
 type="required"
-versionRange="[${loader_version},)"
+versionRange="${loader_range}"
 ordering="NONE"
 side="SERVER"
 
 [[dependencies.terrarasa]]
 modId="minecraft"
 type="required"
-versionRange="[${minecraft_version}]"
+versionRange="${minecraft_range}"
 ordering="NONE"
 side="SERVER"
 

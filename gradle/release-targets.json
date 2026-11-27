@@ -1,0 +1,79 @@
+{
+  "include": [
+    {
+      "family": "classic",
+      "target_label": "mc1.21.1-1.21.4",
+      "build_minecraft_version": "1.21.1",
+      "minecraft_versions": ["1.21.1", "1.21.4"],
+      "minecraft_range": ">=1.21.1 <=1.21.4",
+      "loader": "fabric",
+      "loom_version": "1.17.21",
+      "fabric_loader_version": "0.19.5",
+      "fabric_api_version": "0.116.17+1.21.1",
+      "fabric_api_range": ">=0.116.17",
+      "java_version": "21"
+    },
+    {
+      "family": "classic",
+      "target_label": "mc1.21.1-1.21.4",
+      "build_minecraft_version": "1.21.1",
+      "minecraft_versions": ["1.21.1", "1.21.4"],
+      "minecraft_range": "[1.21.1,1.21.5)",
+      "loader": "neoforge",
+      "moddev_version": "2.0.148",
+      "neoforge_version": "21.1.265",
+      "loader_range": "[21.1.265,)",
+      "java_version": "21"
+    },
+    {
+      "family": "legacy",
+      "target_label": "mc1.21.11",
+      "build_minecraft_version": "1.21.11",
+      "minecraft_versions": ["1.21.11"],
+      "minecraft_range": "1.21.11",
+      "loader": "fabric",
+      "loom_version": "1.17.21",
+      "fabric_loader_version": "0.19.5",
+      "fabric_api_version": "0.141.6+1.21.11",
+      "fabric_api_range": ">=0.141.6+1.21.11",
+      "java_version": "21"
+    },
+    {
+      "family": "legacy",
+      "target_label": "mc1.21.11",
+      "build_minecraft_version": "1.21.11",
+      "minecraft_versions": ["1.21.11"],
+      "minecraft_range": "[1.21.11]",
+      "loader": "neoforge",
+      "moddev_version": "2.0.148",
+      "neoforge_version": "21.11.48",
+      "loader_range": "[21.11.48,)",
+      "java_version": "21"
+    },
+    {
+      "family": "modern",
+      "target_label": "mc26.x",
+      "build_minecraft_version": "26.1",
+      "minecraft_versions": ["26.1", "26.1.1", "26.1.2", "26.2", "26.3"],
+      "minecraft_range": ">=26.1 <26.4",
+      "loader": "fabric",
+      "loom_version": "1.18.4",
+      "fabric_loader_version": "0.19.5",
+      "fabric_api_version": "0.145.1+26.1",
+      "fabric_api_range": ">=0.145.1",
+      "java_version": "25"
+    },
+    {
+      "family": "modern",
+      "target_label": "mc26.x",
+      "build_minecraft_version": "26.1.2",
+      "minecraft_versions": ["26.1.2", "26.2", "26.3"],
+      "minecraft_range": "[26.1.2,26.4)",
+      "loader": "neoforge",
+      "moddev_version": "2.0.148",
+      "neoforge_version": "26.1.2.126",
+      "loader_range": "[26.1.2.126,)",
+      "java_version": "25"
+    }
+  ]
+}

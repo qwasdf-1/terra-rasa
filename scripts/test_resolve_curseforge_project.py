@@ -46,15 +46,15 @@ class ResolveCurseForgeProjectTest(unittest.TestCase):
             minecraft_version="1.21.11",
             java_version="21",
         )
-        self.assertEqual(ids_21, [100, 201, 401, 9638, 9639])
+        self.assertEqual(ids_21, [100, 201, 401, 9639])
 
         ids_25 = resolver.resolve_game_version_ids(
             self.mock_versions,
             self.mock_types,
-            minecraft_version="26.1",
+            minecraft_version=["26.1", "26.2"],
             java_version="25",
         )
-        self.assertEqual(ids_25, [100, 301, 402, 9638, 9639])
+        self.assertEqual(ids_25, [100, 301, 302, 402, 9639])
 
     def test_resolve_game_version_ids_without_java(self) -> None:
         ids = resolver.resolve_game_version_ids(
@@ -63,17 +63,10 @@ class ResolveCurseForgeProjectTest(unittest.TestCase):
             minecraft_version="26.2",
             java_version=None,
         )
-        self.assertEqual(ids, [100, 302, 9638, 9639])
+        self.assertEqual(ids, [100, 302, 9639])
 
     def test_resolve_game_version_ids_custom_environment(self) -> None:
-        ids_server = resolver.resolve_game_version_ids(
-            self.mock_versions,
-            self.mock_types,
-            minecraft_version="26.2",
-            java_version=None,
-            environments=["server"],
-        )
-        self.assertEqual(ids_server, [100, 302, 9639])
+        self.assertEqual(resolver.server_only_game_versions([100, 302, 9638]), [100, 302, 9639])
 
     def test_missing_minecraft_version_fails(self) -> None:
         with self.assertRaises(SystemExit):
@@ -106,7 +99,7 @@ class ResolveCurseForgeProjectTest(unittest.TestCase):
         targets = {
             "include": [
                 {"minecraft_version": "1.21.11", "java_version": "21"},
-                {"minecraft_version": "26.1", "java_version": "25"},
+                {"target_label": "mc26.x", "minecraft_versions": ["26.1", "26.2"], "java_version": "25"},
             ]
         }
 
@@ -123,8 +116,8 @@ class ResolveCurseForgeProjectTest(unittest.TestCase):
                 output = "".join(call.args[0] for call in mock_stdout.write.mock_calls).strip()
                 data = json.loads(output)
                 self.assertEqual(data["project_id"], "12345")
-                self.assertEqual(data["game_versions"]["1.21.11"], [100, 201, 401, 9638, 9639])
-                self.assertEqual(data["game_versions"]["26.1"], [100, 301, 402, 9638, 9639])
+                self.assertEqual(data["game_versions"]["1.21.11"], [100, 201, 401, 9639])
+                self.assertEqual(data["game_versions"]["mc26.x"], [100, 301, 302, 402, 9639])
 
     @patch("resolve_curseforge_project.fetch_api")
     def test_main_with_overrides(self, mock_fetch: MagicMock) -> None:
@@ -135,7 +128,7 @@ class ResolveCurseForgeProjectTest(unittest.TestCase):
                 {"minecraft_version": "1.21.11"},
             ]
         }
-        overrides = {"1.21.11": [555, 666]}
+        overrides = {"1.21.11": [555, 666, 9638]}
 
         with patch.dict(
             os.environ,
@@ -151,7 +144,7 @@ class ResolveCurseForgeProjectTest(unittest.TestCase):
                 output = "".join(call.args[0] for call in mock_stdout.write.mock_calls).strip()
                 data = json.loads(output)
                 self.assertEqual(data["project_id"], "9876")
-                self.assertEqual(data["game_versions"]["1.21.11"], [555, 666, 9638, 9639])
+                self.assertEqual(data["game_versions"]["1.21.11"], [555, 666, 9639])
                 mock_fetch.assert_not_called()
 
 

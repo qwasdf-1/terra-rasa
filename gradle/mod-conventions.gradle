@@ -11,12 +11,13 @@ def minecraftFamily = {
 def loader = rootProject.loader
 def neoforgeLoader = loader == 'neoforge'
 def obfuscatedMinecraft = minecraftVersion.startsWith('1.')
+def targetLabel = (rootProject.findProperty('target_label') ?: "mc${minecraftVersion}").toString()
 
 group = rootProject.maven_group
 version = rootProject.mod_version
 base {
-    // The loader tag keeps Fabric and NeoForge artifacts of the same game version apart.
-    archivesName = "${project.ext.modArchiveName}-mc${minecraftVersion}${neoforgeLoader ? '-neoforge' : ''}"
+    // The loader tag keeps Fabric and NeoForge artifacts of the same target apart.
+    archivesName = "${project.ext.modArchiveName}-${targetLabel}${neoforgeLoader ? '-neoforge' : ''}"
 }
 
 repositories {
@@ -87,13 +88,22 @@ dependencies {
 
 processResources {
     def mixinPrefix = project.ext.find('mixinPrefix') ?: project.ext.modArchiveName.replace('-', '')
+    def terraRasaVersion = rootProject.findProperty('terra_rasa_version') ?: ''
+    def minecraftRange = (rootProject.findProperty('minecraft_range') ?: (neoforgeLoader ? "[${minecraftVersion}]" : minecraftVersion)).toString()
+    def loaderRange = (rootProject.findProperty('loader_range') ?: (neoforgeLoader ? "[${rootProject.neoforge_version},)" : ">=${rootProject.fabric_loader_version}")).toString()
+    def fabricApiRange = (rootProject.findProperty('fabric_api_range') ?: ">=${rootProject.fabric_api_version}").toString()
+    def terraRasaRange = (rootProject.findProperty('terra_rasa_range') ?: (neoforgeLoader ? "[${terraRasaVersion},)" : ">=${terraRasaVersion}")).toString()
     def expandedValues = [
             version: project.version,
             minecraft_version: minecraftVersion,
+            minecraft_range: minecraftRange,
             loader_version: neoforgeLoader ? rootProject.neoforge_version : rootProject.fabric_loader_version,
+            loader_range: loaderRange,
             fabric_api_version: rootProject.fabric_api_version,
+            fabric_api_range: fabricApiRange,
             java_version: javaVersion.toString(),
-            terra_rasa_version: rootProject.findProperty('terra_rasa_version') ?: '',
+            terra_rasa_version: terraRasaVersion,
+            terra_rasa_range: terraRasaRange,
             mixins_config: "${mixinPrefix}-${minecraftFamily}.mixins.json"
     ]
     inputs.properties expandedValues

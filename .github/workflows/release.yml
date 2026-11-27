@@ -16,10 +16,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - id: targets
-        run: echo "matrix=$(jq -c . gradle/minecraft-targets.json)" >> "$GITHUB_OUTPUT"
+        run: echo "matrix=$(jq -c . gradle/release-targets.json)" >> "$GITHUB_OUTPUT"
 
   build:
-    name: build (${{ matrix.minecraft_version }} ${{ matrix.loader }})
+    name: build (${{ matrix.target_label }} ${{ matrix.loader }})
     needs: targets
     runs-on: ubuntu-latest
     strategy:
@@ -40,8 +40,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
 
       # Fabric targets build through Loom with Fabric Loader and Fabric API; NeoForge targets
-      # build through ModDevGradle against the pinned NeoForge version.
-      - name: Build and test Minecraft ${{ matrix.minecraft_version }} (${{ matrix.loader }})
+      # build through ModDevGradle against the pinned NeoForge version. Each row produces one
+      # family-universal jar covering all versions listed in matrix.minecraft_versions.
+      - name: Build and test ${{ matrix.target_label }} (${{ matrix.loader }})
         run: |
           set -euo pipefail
           case "${{ matrix.loader }}" in
@@ -51,6 +52,7 @@ jobs:
                 -Ploom_version=${{ matrix.loom_version }}
                 -Pfabric_loader_version=${{ matrix.fabric_loader_version }}
                 -Pfabric_api_version=${{ matrix.fabric_api_version }}
+                -Pfabric_api_range=${{ matrix.fabric_api_range }}
               )
               ;;
             neoforge)
@@ -58,20 +60,23 @@ jobs:
                 -Ploader=${{ matrix.loader }}
                 -Pmoddev_version=${{ matrix.moddev_version }}
                 -Pneoforge_version=${{ matrix.neoforge_version }}
+                -Ploader_range=${{ matrix.loader_range }}
               )
               ;;
             *)
-              echo "Unsupported loader '${{ matrix.loader }}' for Minecraft ${{ matrix.minecraft_version }}" >&2
+              echo "Unsupported loader '${{ matrix.loader }}' for ${{ matrix.target_label }}" >&2
               exit 1
               ;;
           esac
           ./gradlew clean build "${args[@]}" \
-            -Pminecraft_version=${{ matrix.minecraft_version }} \
+            -Pminecraft_version=${{ matrix.build_minecraft_version }} \
+            -Ptarget_label=${{ matrix.target_label }} \
+            -Pminecraft_range="${{ matrix.minecraft_range }}" \
             -Pjava_version=${{ matrix.java_version }}
 
       - name: Stage runtime jar
         env:
-          MINECRAFT: ${{ matrix.minecraft_version }}
+          TARGET_LABEL: ${{ matrix.target_label }}
           LOADER: ${{ matrix.loader }}
         run: |
           set -euo pipefail
@@ -80,16 +85,16 @@ jobs:
           case "$LOADER" in
             fabric) ;;
             neoforge) loader_tag="-neoforge" ;;
-            *) echo "Unsupported loader '$LOADER' for Minecraft $MINECRAFT" >&2; exit 1 ;;
+            *) echo "Unsupported loader '$LOADER' for $TARGET_LABEL" >&2; exit 1 ;;
           esac
-          jar="build/libs/terra-rasa-mc${MINECRAFT}${loader_tag}-${version}.jar"
+          jar="build/libs/terra-rasa-${TARGET_LABEL}${loader_tag}-${version}.jar"
           test -f "$jar"
           mkdir -p dist
           cp "$jar" dist/
 
       - uses: actions/upload-artifact@v7
         with:
-          name: terra-rasa-${{ matrix.minecraft_version }}-${{ matrix.loader }}
+          name: terra-rasa-${{ matrix.target_label }}-${{ matrix.loader }}
           path: dist/*.jar
           if-no-files-found: error
           retention-days: 1
@@ -118,20 +123,20 @@ jobs:
             exit 1
           }
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          while IFS=$'\t' read -r minecraft loader; do
+          while IFS=$'\t' read -r target_label loader; do
             loader_tag=""
             case "$loader" in
               fabric) ;;
               neoforge) loader_tag="-neoforge" ;;
-              *) echo "Unsupported loader '$loader' for Minecraft $minecraft" >&2; exit 1 ;;
+              *) echo "Unsupported loader '$loader' for $target_label" >&2; exit 1 ;;
             esac
-            test -f "dist/terra-rasa-mc${minecraft}${loader_tag}-${version}.jar" || {
-              echo "Missing runtime jar for Minecraft $minecraft ($loader)" >&2
+            test -f "dist/terra-rasa-${target_label}${loader_tag}-${version}.jar" || {
+              echo "Missing runtime jar for $target_label ($loader)" >&2
               exit 1
             }
-          done < <(jq -r '.include[] | "\(.minecraft_version)\t\(.loader // "fabric")"' <<< "$TARGETS_JSON")
+          done < <(jq -r '.include[] | "\(.target_label)\t\(.loader // "fabric")"' <<< "$TARGETS_JSON")
           expected_count="$(jq '.include | length' <<< "$TARGETS_JSON")"
-          actual_count="$(find dist -maxdepth 1 -name "terra-rasa-mc*-${version}.jar" | wc -l)"
+          actual_count="$(find dist -maxdepth 1 -name "terra-rasa-*-${version}.jar" | wc -l)"
           test "$actual_count" -eq "$expected_count" || {
             echo "Expected $expected_count runtime jars, found $actual_count" >&2
             exit 1

@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.5.1
 
 ### Changed
 
+- Publish one family-universal jar per compatibility tier and loader (`mc1.21.1-1.21.4`, `mc1.21.11`, and `mc26.x` on Fabric and NeoForge) via `gradle/release-targets.json`, while keeping per-version CI checks in `gradle/minecraft-targets.json`.
+- Enforce server-only environment metadata in CurseForge release uploads and add marketplace metadata sync and CurseForge repair workflows.
 - The integration suite now imports the shared `mc-testkit` from the private `mc-tooling` repository, checked out at `../mc-tooling`, instead of the test kit bundled in `testing/`, which is removed.
 
 ## 0.5.0

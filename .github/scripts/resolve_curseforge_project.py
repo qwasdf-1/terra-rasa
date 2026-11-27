@@ -28,16 +28,19 @@ def parse_targets(raw_targets: str | None) -> list[dict]:
         except json.JSONDecodeError as exc:
             fail(f"Invalid TARGETS_JSON: {exc}")
 
-    targets_file = os.path.join("gradle", "minecraft-targets.json")
-    if os.path.isfile(targets_file):
-        try:
-            with open(targets_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data.get("include", [])
-        except Exception as exc:
-            fail(f"Could not read {targets_file}: {exc}")
+    for candidate in (
+        os.path.join("gradle", "release-targets.json"),
+        os.path.join("gradle", "minecraft-targets.json"),
+    ):
+        if os.path.isfile(candidate):
+            try:
+                with open(candidate, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    return data.get("include", [])
+            except Exception as exc:
+                fail(f"Could not read {candidate}: {exc}")
 
-    fail("No targets provided via TARGETS_JSON or gradle/minecraft-targets.json")
+    fail("No targets provided via TARGETS_JSON or gradle/release-targets.json")
 
 
 def fetch_api(path: str, token: str, user_agent: str) -> list | dict:
@@ -82,7 +85,7 @@ def server_only_game_versions(ids: list[int]) -> list[int]:
 def resolve_game_version_ids(
     versions: list[dict],
     version_types: list[dict],
-    minecraft_version: str,
+    minecraft_version: str | list[str],
     java_version: str | None = None,
 ) -> list[int]:
     type_name_by_id = {vt.get("id"): vt.get("name", "") for vt in version_types}
@@ -100,37 +103,43 @@ def resolve_game_version_ids(
     if fabric_id is None:
         fail("Could not find CurseForge game version ID for loader 'Fabric'")
 
-    # 2. Resolve Minecraft game version ID
-    mc_id: int | None = None
-    mc_norm = minecraft_version.strip()
-    mc_slug = mc_norm.replace(".", "-")
-    mc_prefix = f"minecraft {mc_norm}".lower()
+    # 2. Resolve Minecraft game version ID(s)
+    mc_versions = [minecraft_version] if isinstance(minecraft_version, str) else list(minecraft_version)
+    if not mc_versions:
+        fail("No Minecraft versions provided to resolve")
 
-    # Pass 1: search inside Minecraft version categories
-    for v in versions:
-        v_name = (v.get("name") or "").strip()
-        v_slug = (v.get("slug") or "").strip()
-        vt_name = type_name_by_id.get(v.get("gameVersionTypeID"), "").lower()
-        vt_slug = type_slug_by_id.get(v.get("gameVersionTypeID"), "").lower()
-        if ("minecraft" in vt_name or "minecraft" in vt_slug) and (
-            v_name == mc_norm or v_slug == mc_slug or v_name.lower() == mc_prefix
-        ):
-            mc_id = v.get("id")
-            break
+    result: list[int] = [fabric_id]
+    for mc_raw in mc_versions:
+        mc_id: int | None = None
+        mc_norm = mc_raw.strip()
+        mc_slug = mc_norm.replace(".", "-")
+        mc_prefix = f"minecraft {mc_norm}".lower()
 
-    # Pass 2: search across any version type
-    if mc_id is None:
+        # Pass 1: search inside Minecraft version categories
         for v in versions:
             v_name = (v.get("name") or "").strip()
             v_slug = (v.get("slug") or "").strip()
-            if v_name == mc_norm or v_slug == mc_slug or v_name.lower() == mc_prefix:
+            vt_name = type_name_by_id.get(v.get("gameVersionTypeID"), "").lower()
+            vt_slug = type_slug_by_id.get(v.get("gameVersionTypeID"), "").lower()
+            if ("minecraft" in vt_name or "minecraft" in vt_slug) and (
+                v_name == mc_norm or v_slug == mc_slug or v_name.lower() == mc_prefix
+            ):
                 mc_id = v.get("id")
                 break
 
-    if mc_id is None:
-        fail(f"Could not find CurseForge game version ID for Minecraft '{minecraft_version}'")
+        # Pass 2: search across any version type
+        if mc_id is None:
+            for v in versions:
+                v_name = (v.get("name") or "").strip()
+                v_slug = (v.get("slug") or "").strip()
+                if v_name == mc_norm or v_slug == mc_slug or v_name.lower() == mc_prefix:
+                    mc_id = v.get("id")
+                    break
 
-    result: list[int] = [mc_id, fabric_id]
+        if mc_id is None:
+            fail(f"Could not find CurseForge game version ID for Minecraft '{mc_raw}'")
+        if mc_id not in result:
+            result.append(mc_id)
 
     # 3. Optional Java version
     if java_version:
@@ -146,43 +155,38 @@ def resolve_game_version_ids(
                     result.append(java_id)
                 break
 
-    # 4. Resolve Environment IDs (Client and/or Server)
-    target_envs = ["server"]
+    # 4. Enforce Server-only environment ID
     env_type_ids = {
         vt.get("id")
         for vt in version_types
         if "environment" in (vt.get("name") or "").lower() or "environment" in (vt.get("slug") or "").lower()
     }
-
-    for env in target_envs:
-        env_norm = env.strip().lower()
-        env_id: int | None = None
-
-        if env_type_ids:
-            for v in versions:
-                if v.get("gameVersionTypeID") in env_type_ids:
-                    v_name = (v.get("name") or "").strip().lower()
-                    v_slug = (v.get("slug") or "").strip().lower()
-                    if v_name == env_norm or v_slug == env_norm:
-                        env_id = v.get("id")
-                        break
-
-        if env_id is None:
-            for v in versions:
+    server_id: int | None = None
+    if env_type_ids:
+        for v in versions:
+            if v.get("gameVersionTypeID") in env_type_ids:
                 v_name = (v.get("name") or "").strip().lower()
                 v_slug = (v.get("slug") or "").strip().lower()
-                if v_name == env_norm or v_slug == env_norm:
-                    env_id = v.get("id")
+                if v_name == "server" or v_slug == "server":
+                    server_id = v.get("id")
                     break
 
-        if env_id is None:
-            env_id = KNOWN_ENV_IDS.get(env_norm)
+    if server_id is None:
+        for v in versions:
+            v_name = (v.get("name") or "").strip().lower()
+            v_slug = (v.get("slug") or "").strip().lower()
+            if v_name == "server" or v_slug == "server":
+                server_id = v.get("id")
+                break
 
-        if env_id is not None:
-            if env_id not in result:
-                result.append(env_id)
-        else:
-            fail(f"Could not find CurseForge game version ID for environment '{env}'")
+    if server_id is None:
+        server_id = KNOWN_ENV_IDS.get("server")
+
+    if server_id is None:
+        fail("Could not find CurseForge game version ID for environment 'server'")
+
+    if server_id not in result:
+        result.append(server_id)
 
     return sorted(set(result) - {KNOWN_ENV_IDS["client"]})
 
@@ -221,14 +225,24 @@ def main() -> None:
         except Exception as exc:
             fail(f"Invalid CURSEFORGE_GAME_VERSIONS override: {exc}")
 
-    # Check if all targets are covered by manual overrides
-    all_overridden = all(t.get("minecraft_version") in overrides for t in targets)
+    def target_key(target: dict) -> str | None:
+        return target.get("target_label") or target.get("minecraft_version")
+
+    def target_mc_versions(target: dict) -> list[str]:
+        if isinstance(target.get("minecraft_versions"), list) and target["minecraft_versions"]:
+            return [str(v) for v in target["minecraft_versions"]]
+        if target.get("minecraft_version"):
+            return [str(target["minecraft_version"])]
+        return []
+
+    all_overridden = all(target_key(t) in overrides for t in targets)
 
     game_versions_map: dict[str, list[int]] = {}
     if all_overridden:
         for t in targets:
-            mc = t.get("minecraft_version")
-            game_versions_map[mc] = server_only_game_versions(overrides[mc])
+            key = target_key(t)
+            if key:
+                game_versions_map[key] = server_only_game_versions(overrides[key])
     else:
         versions_raw = fetch_api("game/versions", token=curseforge_token, user_agent=user_agent)
         if not isinstance(versions_raw, list):
@@ -243,17 +257,18 @@ def main() -> None:
             types_raw = []
 
         for t in targets:
-            mc = t.get("minecraft_version")
-            if not mc:
+            key = target_key(t)
+            mc_list = target_mc_versions(t)
+            if not key or not mc_list:
                 continue
-            if mc in overrides:
-                game_versions_map[mc] = server_only_game_versions(overrides[mc])
+            if key in overrides:
+                game_versions_map[key] = server_only_game_versions(overrides[key])
             else:
                 java_ver = t.get("java_version")
-                game_versions_map[mc] = resolve_game_version_ids(
+                game_versions_map[key] = resolve_game_version_ids(
                     versions_raw,
                     types_raw,
-                    minecraft_version=mc,
+                    minecraft_version=mc_list,
                     java_version=java_ver,
                 )
 
