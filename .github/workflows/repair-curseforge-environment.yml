@@ -4,16 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       apply:
-        description: Apply metadata updates (unchecked previews only)
+        description: Apply updates (unchecked previews only)
         type: boolean
         default: false
       file_ids:
-        description: Optional comma-separated file IDs for a pilot; blank scans all visible runtime jars
+        description: Optional comma-separated verified file IDs; blank includes all discovered IDs
         type: string
         required: false
+      allow_reconstructed:
+        description: Approve reconstructed tags after reviewing preview (not a live tag read)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: curseforge-environment-repair
@@ -23,12 +28,13 @@ jobs:
   repair:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - name: Preview or repair existing CurseForge file tags
         env:
+          GH_TOKEN: ${{ github.token }}
           CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
           CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
-          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
           APPLY: ${{ inputs.apply }}
           FILE_IDS: ${{ inputs.file_ids }}
+          ALLOW_RECONSTRUCTED: ${{ inputs.allow_reconstructed }}
         run: python3 .github/scripts/repair_curseforge_environment.py
